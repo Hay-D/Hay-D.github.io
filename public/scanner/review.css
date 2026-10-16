@@ -1,0 +1,81 @@
+.results-panel{margin-top:4px}
+.review-heading{display:flex;align-items:center;gap:14px;justify-content:space-between;margin-bottom:12px}
+.review-heading h2{font-size:19px;letter-spacing:-.02em}
+.review-heading p{display:none}
+.review-heading .icon-button{border:1px solid var(--border);border-radius:7px;flex-shrink:0}
+.review-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.review-toolbar select{font-size:12px;min-width:132px;font-family:var(--mono)}
+.review-toolbar .text-button{font-family:var(--mono);font-size:11px}
+.review-columns,.review-card{display:grid;grid-template-columns:22px 68px minmax(0,1fr) 84px 108px 28px;column-gap:10px;align-items:center}
+.review-columns{padding:8px 14px;font-size:10px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);border:1px solid var(--border);border-bottom:0;border-radius:8px 8px 0 0;background:var(--bg-soft)}
+.column-item{grid-column:2/4}
+.column-qty{grid-column:4;text-align:center;padding-right:0}
+.column-price{grid-column:5;display:flex;gap:5px;align-items:center;justify-content:center;padding-right:0}
+.column-price img{width:12px;height:12px;object-fit:contain;opacity:.8}
+.review-list{display:grid;grid-template-columns:minmax(0,1fr);gap:0;border:1px solid var(--border);border-radius:0 0 8px 8px;overflow:hidden;background:var(--surface)}
+.review-columns[hidden]+.review-list{border-radius:8px}
+.review-card{grid-template-rows:auto;row-gap:0;min-height:66px;padding:10px 12px;border:0;border-bottom:1px solid var(--border-soft);border-radius:0;background:transparent;min-width:0;position:relative;transition:background .12s}
+.review-card:last-child{border-bottom:0}
+.review-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:transparent}
+.review-card:hover{background:#ffffff06}
+.review-card.confirmed{background:#fafafa08}
+.review-card.confirmed::before{background:var(--ink)}
+.review-card.needs-check::before{background:var(--warn)}
+.review-card .confirm-check{grid-column:1;grid-row:1;width:18px;height:18px;margin:0;accent-color:#fafafa;cursor:pointer}
+.review-card .scan-crop{grid-column:2;grid-row:1;width:68px;height:68px;object-fit:contain;border:0;border-radius:0;background:transparent;padding:0}
+.review-card .review-item{grid-column:3;grid-row:1;text-align:left;padding:2px 0;min-width:0;align-self:center}
+.review-card .review-item strong{font-size:13.5px;font-weight:600;line-height:1.35;display:block;white-space:normal;overflow-wrap:anywhere;letter-spacing:-.01em}
+.review-card.confirmed .review-item strong{color:#d4d4d8}
+.review-card .review-item small{display:block;margin-top:3px;font-size:10.5px;font-family:var(--mono);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--faint)}
+.review-card.needs-check .review-item small{color:var(--warn)}
+.review-card.confirmed .review-item small{color:var(--muted)}
+.review-card .review-controls{grid-column:4/6;grid-row:1;display:flex;align-items:center;gap:8px;padding:0;margin:0;border:0;min-width:0;justify-content:flex-end}
+.review-card .review-quantity{display:block;margin:0;min-width:0}
+.review-card .review-quantity>span{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0)}
+.review-card .review-quantity input{display:block;width:84px;min-width:84px;max-width:84px;height:40px;min-height:40px;padding:8px;font:14px var(--mono);text-align:center;font-variant-numeric:tabular-nums;border:1px solid var(--border);border-radius:6px;background:var(--field);color:var(--ink)}
+.review-card .scan-price-field{grid-column:auto;display:flex;align-items:center;gap:5px;height:40px;min-width:0;margin:0;padding:0 8px;background:var(--field);border:1px solid var(--border);border-radius:6px}
+.review-card .scan-price-field>img{width:14px;height:14px;object-fit:contain;flex-shrink:0}
+.review-card .row-price{width:76px;min-width:0;max-width:100%;height:36px;min-height:36px;padding:4px 0;background:transparent;border:0;border-radius:2px;font-size:13px;font-family:var(--mono);text-align:center;font-variant-numeric:tabular-nums;color:var(--ink)}
+.review-card .row-price::placeholder{color:var(--faint)}
+.review-card .review-quantity input:focus,.review-card .scan-price-field:focus-within{border-color:var(--ink);background:#0c0c0f;outline:none}
+.review-card .row-price:focus{outline:none}
+.review-card .remove-row{grid-column:6;grid-row:1;align-self:center;justify-self:center;width:28px;height:32px;min-height:0;padding:4px;color:var(--faint);border-radius:5px}
+.review-card .remove-row:hover{color:var(--danger);background:#ffffff08}
+.review-card .remove-row svg{width:14px;height:14px}
+.review-list.prices-hidden .review-card,.review-columns.prices-hidden{grid-template-columns:22px 68px minmax(0,1fr) 84px 28px}
+.review-list.prices-hidden .review-card .review-controls{grid-column:4/5}
+.review-list.prices-hidden .remove-row{grid-column:5}
+.review-columns.prices-hidden .column-price{display:none}
+.result-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:14px;padding:14px 4px 0;border-top:1px solid var(--border-soft)}
+.result-actions>span{font-size:11px;font-family:var(--mono);color:var(--muted);margin-right:auto;font-variant-numeric:tabular-nums}
+.result-actions>span::before{content:"ready: "}
+.result-actions .button{min-height:42px}
+
+@media(min-width:900px){
+  .review-card{min-height:68px;padding:10px 14px}
+  .review-card .review-item strong{font-size:14px}
+  .review-columns,.review-card{grid-template-columns:24px 68px minmax(0,1fr) 92px 124px 30px}
+  .review-card .review-quantity input{width:92px;min-width:92px;max-width:92px}
+  .review-card .row-price{width:90px}
+  .review-list.prices-hidden .review-card,.review-columns.prices-hidden{grid-template-columns:24px 68px minmax(0,1fr) 92px 30px}
+}
+@media(max-width:560px){
+  .review-columns{display:none}
+  .review-list{border-radius:8px;gap:0}
+  .review-card{grid-template-columns:20px 60px minmax(0,1fr) 26px;grid-template-rows:auto auto;gap:8px 9px;padding:12px 11px}
+  .review-card .confirm-check{grid-column:1;grid-row:1;align-self:start;margin-top:3px}
+  .review-card .scan-crop{grid-column:2;grid-row:1;width:60px;height:60px}
+  .review-card .review-item{grid-column:3;grid-row:1}
+  .review-card .review-item strong{font-size:13px}
+  .review-card .remove-row{grid-column:4;grid-row:1}
+  .review-card .review-controls{grid-column:2/5;grid-row:2;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .review-card .review-quantity input{width:100%;min-width:0;max-width:none}
+  .review-card .scan-price-field{width:100%}
+  .review-card .row-price{width:100%;flex:1}
+  .review-list.prices-hidden .review-card{grid-template-columns:20px 60px minmax(0,1fr) 26px}
+  .review-list.prices-hidden .review-card .review-controls{grid-column:2/4;grid-template-columns:1fr}
+  .review-list.prices-hidden .remove-row{grid-column:4}
+  .result-actions{flex-wrap:wrap}
+  .result-actions>span{width:100%;margin-bottom:2px}
+  .result-actions>.button{flex:1;font-size:12px}
+}

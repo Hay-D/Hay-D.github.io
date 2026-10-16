@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none" role="img" aria-labelledby="hayday-market-mark-title hayday-market-mark-desc">
+  <title id="hayday-market-mark-title">HayDex</title>
+  <desc id="hayday-market-mark-desc">HayDex emblem: a barn, trade arrows, wheat, coins and scanner corners.</desc>
+  <g><g fill="none" stroke="#81A58A" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17 67V42Q17 28 31 28H57M199 28H225Q239 28 239 42V67M239 189V214Q239 228 225 228H199M57 228H31Q17 228 17 214V189"/>
+    </g><path d="M57 109 82 75 128 49 174 75 199 109V188Q199 204 183 204H73Q57 204 57 188Z" fill="#E6B65C"/>
+      <path d="M174 84 191 107V188Q191 196 183 196H174Z" fill="#B87E36"/>
+      <path d="M67 111 86 83 128 60 169 83 188 111Z" fill="#FFE3A0"/>
+      <g fill="none" stroke="#B87E36" stroke-width="3" stroke-linecap="round">
+        <path d="M74 123V185M86 123V185M170 123V185M182 123V181"/>
+      </g>
+      <path d="M90 204V136Q90 117 109 117H147Q166 117 166 136V204Z" fill="#FFE3A0"/>
+      <path d="M97 204V137Q97 125 109 125H147Q159 125 159 137V204Z" fill="#81A58A"/>
+      <path d="M110 137H134V130L149 144 134 158V151H110Q107 151 107 148V140Q107 137 110 137Z" fill="#FFF8E7"/>
+      <path d="M146 170H122V163L107 177 122 191V184H146Q149 184 149 181V173Q149 170 146 170Z" fill="#E6B65C"/>
+      <rect x="115" y="76" width="26" height="26" rx="7" fill="#81A58A"/>
+      <path d="M128 81V97M120 89H136" fill="none" stroke="#FFE3A0" stroke-width="3" stroke-linecap="round"/>
+      <path d="M43 105 72 66 128 35 184 66 213 105Q216 110 212 114L208 118Q205 121 201 117L174 80 128 55 82 80 55 117Q51 121 48 118L44 114Q40 110 43 105Z" fill="#81A58A"/>
+      <path d="M51 107 78 73 128 45 178 73 205 107" fill="none" stroke="#B0C39D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M81 205H175" fill="none" stroke="#81A58A" stroke-width="8" stroke-linecap="round"/>
+    <g stroke="#81A58A" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M62 208Q45 178 48 141" fill="none" stroke="#81A58A" stroke-width="5"/>
+      <path d="M49 155Q35 151 34 136Q48 138 49 155Z" fill="#E6B65C" stroke-width="3"/>
+      <path d="M48 143Q40 132 48 121Q58 132 48 143Z" fill="#E6B65C" stroke-width="3"/>
+      <path d="M49 168Q36 167 31 153Q46 151 49 168Z" fill="#E6B65C" stroke-width="3"/>
+      <path d="M51 181Q36 181 33 168Q47 165 51 181Z" fill="#E6B65C" stroke-width="3"/>
+      <path d="M49 155Q62 151 63 138Q49 139 49 155Z" fill="#FFE3A0" stroke-width="3"/>
+      <path d="M50 169Q65 165 66 152Q50 153 50 169Z" fill="#FFE3A0" stroke-width="3"/>
+      <path d="M54 184Q68 179 69 166Q52 169 54 184Z" fill="#FFE3A0" stroke-width="3"/>
+    </g><path d="M177 188V198C177 209 219 209 219 198V188Z" fill="#B87E36" stroke="#81A58A" stroke-width="3.5" stroke-linejoin="round"/>
+      <ellipse cx="198" cy="188" rx="21" ry="10" fill="#E6B65C" stroke="#81A58A" stroke-width="3.5"/>
+      <path d="M188 201V204M198 202V206M208 200V204" fill="none" stroke="#81A58A" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="199" cy="174" r="22" fill="#E6B65C" stroke="#81A58A" stroke-width="4"/>
+      <circle cx="199" cy="174" r="15" fill="none" stroke="#B87E36" stroke-width="2.5"/>
+      <path d="M191 164H196V171H202V164H207V184H202V177H196V184H191Z" fill="#81A58A"/>
+      <path d="M190 159 193 157" fill="none" stroke="#FFF8E7" stroke-width="3" stroke-linecap="round"/>
+    </g>
+</svg>

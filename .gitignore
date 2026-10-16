@@ -1,0 +1,15 @@
+node_modules/
+dist/
+artifacts/
+__pycache__/
+*.pyc
+.env
+.env.*
+.DS_Store
+/DESIGN.md
+/ATTRIBUTION.md
+/VALIDATION.md
+/tests/
+/vercel.json
+/main.py
+/public/assets/items/

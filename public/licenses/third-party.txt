@@ -1,0 +1,7 @@
+Hay Day artwork and names belong to Supercell and are not covered by the HayDex Apache-2.0 license. Item images come from the Hay Day Wiki. Source pages and image URLs are listed in data/catalog.json. Set tiles combine those images; Help and coin artwork come from the same wiki.
+
+HayDex is unofficial and is not endorsed by Supercell. See Supercell's Fan Content Policy: https://supercell.com/en/fan-content-policy/
+
+ONNX Runtime Web 1.23.2 is distributed under the MIT license. Its license is in runtime/LICENSE.
+
+DM Sans and DM Serif Display use the SIL Open Font License 1.1. Their license files are in assets/fonts/.
