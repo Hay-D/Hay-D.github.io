@@ -105,17 +105,21 @@ export async function renderTradePage(rows, byId, settings, options, columns, pa
         ctx.drawImage(coin, x + plan.cell * .045 + textWidth, y + font * .24, size, size);
       }
     }
+    let quantityWidth = 0;
     if (options.quantities) {
+      const quantity = number(row.quantity);
       ctx.font = `700 ${Math.min(60, Math.max(20, plan.cell * .25))}px sans-serif`;
+      quantityWidth = Math.min(ctx.measureText(quantity).width, plan.cell * .8);
       ctx.textAlign = 'right';
-      ctx.fillText(number(row.quantity), x + plan.cell * .95, y + plan.cell * (showName ? .81 : .93), plan.cell * .8);
+      ctx.fillText(quantity, x + plan.cell * .95, y + plan.cell * .955, plan.cell * .8);
       ctx.textAlign = 'left';
     }
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;
     if (showName) {
       ctx.font = `${item.bundle ? 650 : 500} ${Math.max(11, Math.min(18, plan.cell * .065))}px sans-serif`;
-      ctx.fillText(fit(ctx, item.name, plan.cell * .91), x + plan.cell * .045, y + plan.cell * .955);
+      const nameWidth = options.quantities ? plan.cell * .87 - quantityWidth : plan.cell * .91;
+      if (nameWidth >= ctx.measureText('…').width) ctx.fillText(fit(ctx, item.name, nameWidth), x + plan.cell * .045, y + plan.cell * .955);
     }
   }
   let bottom = top + Math.max(0, rowsHeight) + options.gap;

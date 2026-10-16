@@ -23,9 +23,9 @@
 .tile-price{color:inherit;border:0;background:transparent;padding:0;font-weight:730;line-height:1.25;font-size:clamp(17px,calc(var(--tile-size,100px)*.22),43px);width:var(--price-width,3ch);max-width:80%;height:1.3em;text-shadow:0 2px 4px #000,1px 0 3px #000;letter-spacing:-.65px;border-radius:2px}
 .tile-price:focus,.tile-quantity:focus{background:#09090bf2;color:#fff;outline:1px solid #fafafa;outline-offset:2px;text-shadow:none}
 .tile-coin{width:clamp(16px,calc(var(--tile-size,100px)*.17),32px);height:auto;pointer-events:none}
-.tile-quantity{position:absolute;bottom:4%;right:5%;width:82%;text-align:right;background:transparent;border:0;padding:0;color:inherit;font-weight:730;font-size:clamp(21px,calc(var(--tile-size,100px)*.26),46px);line-height:1.2;height:1.3em;text-shadow:0 2px 4px #000,1px 0 3px #000;border-radius:2px;font-variant-numeric:tabular-nums}
-.has-name .tile-quantity{bottom:17%}
-.tile-name{position:absolute;bottom:5%;left:6%;right:4%;font-size:clamp(9px,calc(var(--tile-size,100px)*.073),13px);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 4px #000;pointer-events:none}
+.tile-footer{position:absolute;bottom:4%;left:5%;right:5%;display:flex;align-items:baseline;justify-content:flex-end;gap:4%;pointer-events:none}
+.tile-quantity{flex:0 1 auto;width:var(--quantity-width,3ch);max-width:90%;min-width:0;text-align:right;background:transparent;border:0;padding:0;color:inherit;font-weight:730;font-size:clamp(21px,calc(var(--tile-size,100px)*.26),46px);line-height:1.2;height:1.3em;text-shadow:0 2px 4px #000,1px 0 3px #000;border-radius:2px;font-variant-numeric:tabular-nums;pointer-events:auto}
+.tile-name{flex:1;min-width:0;font-size:clamp(9px,calc(var(--tile-size,100px)*.073),13px);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 4px #000;pointer-events:none}
 .bundle-tile .tile-name{font-weight:650;letter-spacing:.25px}
 .tile-remove,.tile-select,.tile-grip{position:absolute;display:grid;place-items:center;color:#ececec;background:#09090bd9;padding:4px;width:26px;height:26px;border-radius:5px;z-index:2;opacity:0;border:1px solid #3f3f46}
 .tile-remove{left:3px;bottom:4px;width:clamp(10px,calc(var(--tile-size,100px)*.18),18px);height:clamp(10px,calc(var(--tile-size,100px)*.18),18px);padding:2px;border-radius:4px}
