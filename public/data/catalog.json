@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-09",
+  "updated": "2026-10-21",
   "source": "https://hayday.fandom.com/wiki/Goods_List",
   "items": [
     {
@@ -1501,7 +1501,7 @@
     },
     {
       "id": "caffe-latte",
-      "name": "Caff\u00e8 latte",
+      "name": "Caffè latte",
       "category": "Products",
       "level": 43,
       "maxPrice": 219.0,
@@ -1534,7 +1534,7 @@
     },
     {
       "id": "caffe-mocha",
-      "name": "Caff\u00e8 mocha",
+      "name": "Caffè mocha",
       "category": "Products",
       "level": 45,
       "maxPrice": 291.0,
@@ -4721,6 +4721,102 @@
       "imageSource": "https://static.wikia.nocookie.net/hayday/images/f/fb/Fruity_Milkshake.png",
       "source": "https://hayday.fandom.com/wiki/Fruity_Milkshake",
       "machine": "Milkshake Bar"
+    },
+    {
+      "id": "chicken-feed",
+      "name": "Chicken feed",
+      "category": "Animal feed",
+      "group": "Feed Mill",
+      "machine": "Feed Mill",
+      "level": 3,
+      "maxPrice": 7,
+      "image": "https://static.wikia.nocookie.net/hayday/images/6/6a/Chicken_Feed.png/revision/latest/scale-to-width-down/192",
+      "imageSource": "https://static.wikia.nocookie.net/hayday/images/6/6a/Chicken_Feed.png",
+      "source": "https://hayday.fandom.com/wiki/Chicken_Feed"
+    },
+    {
+      "id": "cow-feed",
+      "name": "Cow feed",
+      "category": "Animal feed",
+      "group": "Feed Mill",
+      "machine": "Feed Mill",
+      "level": 6,
+      "maxPrice": 14,
+      "image": "https://static.wikia.nocookie.net/hayday/images/f/f6/Cow_Feed.png/revision/latest/scale-to-width-down/192",
+      "imageSource": "https://static.wikia.nocookie.net/hayday/images/f/f6/Cow_Feed.png",
+      "source": "https://hayday.fandom.com/wiki/Cow_Feed"
+    },
+    {
+      "id": "pig-feed",
+      "name": "Pig feed",
+      "category": "Animal feed",
+      "group": "Feed Mill",
+      "machine": "Feed Mill",
+      "level": 10,
+      "maxPrice": 14,
+      "image": "https://static.wikia.nocookie.net/hayday/images/e/e4/Pig_Feed.png/revision/latest/scale-to-width-down/192",
+      "imageSource": "https://static.wikia.nocookie.net/hayday/images/e/e4/Pig_Feed.png",
+      "source": "https://hayday.fandom.com/wiki/Pig_Feed"
+    },
+    {
+      "id": "sheep-feed",
+      "name": "Sheep feed",
+      "category": "Animal feed",
+      "group": "Feed Mill",
+      "machine": "Feed Mill",
+      "level": 16,
+      "maxPrice": 14,
+      "image": "https://static.wikia.nocookie.net/hayday/images/5/58/Sheep_Feed.png/revision/latest/scale-to-width-down/192",
+      "imageSource": "https://static.wikia.nocookie.net/hayday/images/5/58/Sheep_Feed.png",
+      "source": "https://hayday.fandom.com/wiki/Sheep_Feed"
+    },
+    {
+      "id": "lamb-feed",
+      "name": "Lamb feed",
+      "category": "Animal feed",
+      "group": "Feed Mill",
+      "machine": "Feed Mill",
+      "level": 25,
+      "maxPrice": 18,
+      "image": "https://static.wikia.nocookie.net/hayday/images/2/2b/Lamb_Feed.png/revision/latest/scale-to-width-down/192",
+      "imageSource": "https://static.wikia.nocookie.net/hayday/images/2/2b/Lamb_Feed.png",
+      "source": "https://hayday.fandom.com/wiki/Lamb_Feed"
+    },
+    {
+      "id": "goat-feed",
+      "name": "Goat feed",
+      "category": "Animal feed",
+      "group": "Feed Mill",
+      "machine": "Feed Mill",
+      "level": 32,
+      "maxPrice": 14,
+      "image": "https://static.wikia.nocookie.net/hayday/images/e/ed/Goat_Feed.png/revision/latest/scale-to-width-down/192",
+      "imageSource": "https://static.wikia.nocookie.net/hayday/images/e/ed/Goat_Feed.png",
+      "source": "https://hayday.fandom.com/wiki/Goat_Feed"
+    },
+    {
+      "id": "wheat-bundle",
+      "name": "Wheat bundle",
+      "category": "Animal feed",
+      "group": "Feed Mill",
+      "machine": "Feed Mill",
+      "level": 34,
+      "maxPrice": 50,
+      "image": "https://static.wikia.nocookie.net/hayday/images/5/5d/Wheat_Bundle.png/revision/latest/scale-to-width-down/192",
+      "imageSource": "https://static.wikia.nocookie.net/hayday/images/5/5d/Wheat_Bundle.png",
+      "source": "https://hayday.fandom.com/wiki/Wheat_Bundle"
+    },
+    {
+      "id": "meat-bucket",
+      "name": "Meat bucket",
+      "category": "Animal feed",
+      "group": "Feed Mill",
+      "machine": "Feed Mill",
+      "level": 34,
+      "maxPrice": 72,
+      "image": "https://static.wikia.nocookie.net/hayday/images/5/5e/Meat_Bucket.png/revision/latest/scale-to-width-down/192",
+      "imageSource": "https://static.wikia.nocookie.net/hayday/images/5/5e/Meat_Bucket.png",
+      "source": "https://hayday.fandom.com/wiki/Meat_Bucket"
     }
   ]
 }

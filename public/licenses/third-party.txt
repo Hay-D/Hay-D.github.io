@@ -2,6 +2,5 @@ Hay Day artwork and names belong to Supercell and are not covered by the HayDex 
 
 HayDex is unofficial and is not endorsed by Supercell. See Supercell's Fan Content Policy: https://supercell.com/en/fan-content-policy/
 
-ONNX Runtime Web 1.23.2 is distributed under the MIT license. Its license is in runtime/LICENSE.
 
 DM Sans and DM Serif Display use the SIL Open Font License 1.1. Their license files are in assets/fonts/.

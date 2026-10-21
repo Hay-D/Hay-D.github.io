@@ -1,22 +1,15 @@
 .scanner-page .app-main{max-width:1000px}
-.model-badge{display:flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid var(--border);border-radius:99px;font-size:11px;font-family:var(--mono);color:var(--muted);background:var(--surface)}
+.scanner-badge{display:flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid var(--border);border-radius:99px;font-size:11px;font-family:var(--mono);color:var(--muted);background:var(--surface)}
 .status-dot{width:7px;height:7px;border-radius:50%;background:#52525b}
 .status-dot.ready{background:var(--ok)}
 .scan-steps{width:max-content;margin-bottom:20px}
 .scan-steps button{min-width:132px;display:flex;justify-content:center;gap:8px;align-items:center;font-variant-numeric:tabular-nums}
 .scan-steps button span{font-size:10px;opacity:.7;font-variant-numeric:tabular-nums}
-.model-setup{display:flex;gap:14px;align-items:center;border:1px solid var(--border);background:var(--bg-soft);border-radius:10px;padding:17px;margin-bottom:16px;flex-wrap:wrap}
-.model-setup::before{content:"on-device · no uploads leave your phone";display:block;width:100%;font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.03em;margin-bottom:-6px}
 .setup-icon{display:grid;place-items:center;width:38px;height:38px;flex:0 0 38px;border:1px solid var(--border);border-radius:8px;color:var(--ink);background:var(--surface)}
 .setup-icon svg{width:19px;height:19px}
 .setup-copy{flex:1;min-width:180px}
 .setup-copy h2{font-size:14px;font-weight:600;letter-spacing:-.01em}
 .setup-copy p{font-size:12px;color:var(--muted);margin-top:4px}
-.model-setup .button{font-size:12px;min-height:38px;padding:9px 14px}
-.model-progress{display:flex;gap:10px;align-items:center;flex-wrap:wrap;width:100%;font-size:11px;font-family:var(--mono);color:var(--muted)}
-.model-progress progress{width:100%;height:4px;accent-color:var(--ink)}
-.model-progress span{margin-right:auto}
-.model-setup>.inline-error{width:100%;font-size:12px;line-height:1.5;margin:0}
 .photos-panel{background:var(--bg-soft);border:1px solid var(--border);padding:22px;border-radius:10px}
 .photos-panel::before{content:"01 — photos";display:block;font-family:var(--mono);font-size:11px;color:var(--faint);margin-bottom:14px;letter-spacing:.04em}
 .drop-zone{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:1px dashed #3f3f46;border-radius:8px;gap:8px;padding:40px 20px;background:var(--field);cursor:pointer}
@@ -49,7 +42,6 @@
 .scan-progress{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}
 .scan-progress progress{width:100%;height:4px;accent-color:var(--ink)}
 .scan-progress>span{font-size:12px;font-family:var(--mono);color:var(--muted);flex:1}
-.scan-mode-off .model-setup{opacity:.85}
 .scan-busy .photos-panel .drop-zone,.scan-busy .photos-panel .calibration,.scan-busy .upload-list{opacity:.5;pointer-events:none}
 .scan-busy #review-step{pointer-events:none}
 .scanner-preferences{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px}
@@ -98,7 +90,6 @@
   .scanner-page .app-main{padding-top:20px}
   .scan-steps{width:100%;margin-bottom:16px}
   .scan-steps button{flex:1;min-width:0}
-  .model-setup{padding:14px;gap:11px}
   .setup-icon{width:34px;height:34px;flex-basis:34px}
   .photos-panel{padding:16px;border-radius:10px}
   .drop-zone{padding:34px 12px}
@@ -108,9 +99,9 @@
   .calibration{margin-top:14px;padding-top:14px}
   .layout-row{flex-wrap:wrap}
   .layout-row span{width:100%;margin:0}
-  .model-badge{font-size:10px;padding:6px 9px}
+  .scanner-badge{font-size:10px;padding:6px 9px}
   .choose-item-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
   .scan-progress>span{font-size:11px}
   .scanner-preferences{gap:8px;margin-bottom:14px}
 }
-@media(max-width:360px){.model-setup{gap:10px}.setup-icon{display:none}.photos-panel{padding:13px}}
+@media(max-width:360px){.setup-icon{display:none}.photos-panel{padding:13px}}

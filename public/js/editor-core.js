@@ -3,7 +3,7 @@ import { number, totals, unitPrice, parsePrice, parseQuantity, resolveItem, pars
 import { PERMANENT_WATERMARK } from './branding.js';
 
 export const imageDefaults = {
-  layout: 'device',
+  layout: 'auto',
   columns: 4,
   width: 1e3,
   quality: 2,
@@ -208,6 +208,19 @@ export function listText(rows, byId, format, separator) {
   })).join(separator);
 }
 
+export function captionPartials(value) {
+  const text = String(value ?? '').trim().toLowerCase().replace(/[ \t]+/g, ' ');
+  if (text === 'partials accepted') return true;
+  if (text === 'no partials accepted' || text === 'no partials') return false;
+  return null;
+}
+
+export function imageCaption(image, partials = true) {
+  const text = String(image.captionText ?? '').replace(/\r\n?/g, '\n').trim().slice(0, 160);
+  if (text && captionPartials(text) === null) return text;
+  return partials ? 'Partials Accepted' : 'No Partials Accepted';
+}
+
 export function validHex(value, fallback) {
   return /^#[0-9a-f]{6}$/i.test(String(value)) ? value : fallback;
 }
@@ -224,7 +237,7 @@ export function validateImage(options = {}) {
   image.padding = Math.min(40, Math.max(0, Number(image.padding) || 0));
   image.gap = Math.min(16, Math.max(0, Number(image.gap) || 0));
   for (const key of [ 'background', 'border', 'text' ]) image[key] = validHex(image[key], imageDefaults[key]);
-  image.captionText = String(image.captionText || '').slice(0, 160);
+  image.captionText = String(image.captionText || '').replace(/\r\n?/g, '\n').trim().slice(0, 160);
   image.watermark = PERMANENT_WATERMARK;
   image.captionPosition = image.captionPosition === 'top' ? 'top' : 'bottom';
   for (const key of [ 'names', 'prices', 'quantities', 'totals', 'payment', 'caption', 'simplify' ]) image[key] = !!image[key];
@@ -234,6 +247,7 @@ export function validateImage(options = {}) {
 export function restoreImageSettings(options = {}) {
   return validateImage({
     ...options,
+    layout: options.layout === 'device' ? 'auto' : options.layout || imageDefaults.layout,
     ...options.itemNamesVersion === 1 ? {} : {
       names: true
     },

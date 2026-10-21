@@ -106,7 +106,7 @@ html { scroll-padding-top: 64px; }
 .scanner-page .app-main { max-width: 1040px; padding-top: 18px; }
 .page-title { margin-bottom: 16px; align-items: center; }
 .page-title h1 { font: 550 19px var(--sans); letter-spacing: -.02em; }
-.model-badge { font: 400 11px var(--sans); min-height: 36px; border: 0; padding: 8px; border-radius: 6px; background: transparent; }
+.scanner-badge { font: 400 11px var(--sans); min-height: 36px; border: 0; padding: 8px; border-radius: 6px; background: transparent; }
 .status-dot { width: 5px; height: 5px; }
 .scanner-topline { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .scanner-topline .scan-steps { margin: 0; width: auto; }
@@ -114,14 +114,11 @@ html { scroll-padding-top: 64px; }
 .scanner-topline .scanner-preferences { margin: 0; }
 .scanner-preferences .button { min-height: 40px; font-size: 11px; }
 .scanner-preferences #excluded-count { background: transparent; border: 0; padding: 0; font-family: var(--sans); font-size: 10px; }
-.model-setup { padding: 12px 14px; border: 1px solid var(--border); background: var(--surface); border-radius: 6px; gap: 12px; margin-bottom: 14px; }
-.model-setup::before { content: none; }
 .setup-icon { display: none; }
 .setup-copy { min-width: 100px; }
 .setup-copy h2 { font-size: 12px; font-weight: 500; }
 .setup-copy p { font-size: 11px; margin-top: 3px; }
-.model-setup .button { min-height: 40px; font-size: 11px; padding: 10px 12px; }
-.model-progress, .scan-progress > span { font-family: var(--sans); }
+.scan-progress > span { font-family: var(--sans); }
 .photos-panel { border: 0; border-radius: 0; padding: 0; background: transparent; }
 .photos-panel::before { content: none; }
 .drop-zone { padding: 24px 16px; min-height: 160px; border-color: var(--border); border-radius: 5px; background: transparent; gap: 8px; }
@@ -222,9 +219,7 @@ html { scroll-padding-top: 64px; }
   .scanner-topline { gap: 8px; margin-bottom: 14px; }
   .scan-steps button { min-width: 0; padding: 7px 10px; font-size: 11px; }
   .scanner-preferences .button { padding: 8px 10px; font-size: 10px; }
-  .model-setup { padding: 11px 12px; gap: 8px; }
   .setup-copy p { font-size: 10px; }
-  .model-setup .button { font-size: 10px; padding: 10px; }
   .drop-zone { min-height: 148px; padding: 23px 14px; }
   .scan-action > span { font-size: 10px; max-width: none; }
 }
@@ -308,3 +303,42 @@ html { scroll-padding-top: 64px; }
   .selection-tools button { padding: 7px 6px; }
 }
 .image-watermark { display: block; cursor: default; overflow-wrap: anywhere; }
+
+.image-color-field { display: flex; flex-direction: column; align-items: flex-start !important; gap: 6px !important; }
+.image-color-inputs { display: flex; align-items: center; gap: 6px; }
+.image-color-hex { width: 92px; min-width: 0; padding: 9px 7px; font: 12px var(--mono); }
+.image-color-hex[aria-invalid=true] { border-color: var(--danger); }
+.dialog.prices-dialog { height: calc(48dvh + 270px); overflow: hidden; }
+.dialog.prices-dialog[open] { display: flex; flex-direction: column; }
+.prices-dialog .modal-heading { flex-shrink: 0; position: static; }
+.prices-dialog .modal-content { display: flex; flex: 1; min-height: 0; flex-direction: column; overflow: hidden; }
+.prices-dialog .price-tabs, .prices-dialog .dialog-actions { flex-shrink: 0; }
+.price-panel { display: flex; flex: 1; min-height: 0; flex-direction: column; overflow: auto; scrollbar-width: thin; overscroll-behavior: contain; }
+.price-panel > :not(.editor-price-list):not(.payment-grid) { flex-shrink: 0; }
+.price-panel .editor-price-list, .price-panel .payment-grid { flex: 1; min-height: 80px; max-height: none; overscroll-behavior: contain; }
+.price-panel .payment-grid { align-content: start; }
+.prices-dialog #payment-scope { margin-block: 0; }
+.price-tabs { display: flex; gap: 4px; }
+.price-tabs button { flex: 1; padding-inline: 6px; white-space: nowrap; }
+.market-source { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 11px; margin: 10px 0 12px; }
+.market-source a { text-decoration: underline; text-underline-offset: 3px; }
+.market-note { color: var(--muted); font-size: 11px; margin: 0 0 12px; }
+.market-price-row { grid-template-columns: 37px minmax(0,1fr) 142px; }
+.market-price-row > div { min-width: 0; }
+.market-price-row strong { overflow-wrap: anywhere; }
+.market-price-values { display: flex; flex-direction: column; gap: 4px; padding: 6px 7px; background: var(--field); border: 1px solid var(--border); border-radius: 6px; }
+.market-price-value { display: grid; grid-template-columns: 22px 14px minmax(0,1fr); gap: 5px; align-items: center; font-size: 12px; }
+.market-price-row .market-price-value small { margin: 0; color: var(--muted); font-size: 10px; }
+.market-price-row .market-price-value img { width: 14px; height: 14px; }
+.market-price-value output { text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+@media (max-width: 680px) {
+  .market-price-row { grid-template-columns: 31px minmax(0,1fr) 138px; gap: 9px; }
+}
+@media (max-width: 380px) {
+  .price-tabs button { font-size: 10px; padding-inline: 3px; }
+}
+
+.changelog-entry time { margin-left: 8px; color: var(--faint); font-size: 11px; }
+.changelog-older { margin-top: 12px; font-size: 11px; color: var(--muted); }
+.changelog-older summary { cursor: pointer; }
+.changelog-older p { margin-top: 6px; }

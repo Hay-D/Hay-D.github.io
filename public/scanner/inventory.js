@@ -75,7 +75,7 @@ export function extractInventory(data, width, height) {
   }
   const letters = components(white, panel.w, panel.h), glyphs = [];
   for (const s of letters.stats) {
-    if (!(s.h > height * .038 && s.h < height * .072 && s.w > s.h * .1 && s.w < s.h * .9 && s.area > .12 * s.w * s.h)) continue;
+    if (!(s.h > height * .038 && s.h < height * .072 && s.w > s.h * .1 && s.w < s.h * 1.05 && s.area > .12 * s.w * s.h)) continue;
     const isNear = (x, y, radius) => {
       for (let yy = Math.max(0, y - radius); yy <= Math.min(panel.h - 1, y + radius); yy++) {
         for (let xx = Math.max(0, x - radius); xx <= Math.min(panel.w - 1, x + radius); xx++) {
@@ -125,7 +125,7 @@ export function extractInventory(data, width, height) {
   for (const digits of groups) {
     const x = Math.min(...digits.map((g => g.box[0]))), y = Math.min(...digits.map((g => g.box[1])));
     const right = Math.max(...digits.map((g => g.box[0] + g.box[2]))), bottom = Math.max(...digits.map((g => g.box[1] + g.box[3])));
-    const h = bottom - y, side = roundEven(h * 2.75), ix = roundEven(x - h * 2.3), iy = roundEven(y - h * 1.18);
+    const h = bottom - y, side = roundEven(h * 2.75), ix = roundEven(right - h * 2.75), iy = roundEven(y - h * 1.18);
     const quantityBox = [ x, y, right - x, h ];
     if (ix < panel.x || iy < panel.y || ix + side > panel.x + panel.w || iy + side > panel.y + panel.h) {
       skipped.push({
@@ -182,7 +182,7 @@ export function extractSingle(data, width, height) {
   for (let i = 0; i < white.length; i++) white[i] = Math.min(data[4 * i], data[4 * i + 1], data[4 * i + 2]) > 225 && data[4 * i + 3] > 0 ? 1 : 0;
   const letters = components(white, width, height), glyphs = [];
   for (const s of letters.stats) {
-    if (!(s.h >= 8 && s.h <= height * .65 && s.w > s.h * .1 && s.w < s.h * .9 && s.area > .12 * s.w * s.h)) continue;
+    if (!(s.h >= 8 && s.h <= height * .65 && s.w > s.h * .1 && s.w < s.h * 1.05 && s.area > .12 * s.w * s.h)) continue;
     const near = (x, y, r) => {
       for (let yy = Math.max(0, y - r); yy <= Math.min(height - 1, y + r); yy++) for (let xx = Math.max(0, x - r); xx <= Math.min(width - 1, x + r); xx++) if (letters.labels[yy * width + xx] === s.id) return true;
       return false;

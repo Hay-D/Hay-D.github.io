@@ -1,6 +1,6 @@
 import { number } from './core.js';
 
-import { priceLabel, paymentSummary, imageGrid } from './editor-core.js';
+import { priceLabel, paymentSummary, imageGrid, imageCaption } from './editor-core.js';
 
 import { PERMANENT_WATERMARK } from './branding.js';
 
@@ -28,6 +28,32 @@ function fit(ctx, text, width) {
   return result;
 }
 
+function wrapCaption(ctx, text, width) {
+  const lines = [];
+  for (const paragraph of text.split('\n')) {
+    let line = '';
+    for (const word of paragraph.split(/[ \t]+/)) {
+      if (!word) continue;
+      const candidate = line ? line + ' ' + word : word;
+      if (ctx.measureText(candidate).width <= width) {
+        line = candidate;
+        continue;
+      }
+      if (line) lines.push(line);
+      line = '';
+      for (const character of word) {
+        if (line && ctx.measureText(line + character).width > width) {
+          lines.push(line);
+          line = '';
+        }
+        line += character;
+      }
+    }
+    lines.push(line);
+  }
+  return lines;
+}
+
 export function exportPlan(count, options, screenColumns) {
   const width = options.width, grid = imageGrid(count, options, width, options.layout === 'fixed' ? options.columns : screenColumns);
   const {columns: columns, cell: cell} = grid;
@@ -42,8 +68,11 @@ export function exportPlan(count, options, screenColumns) {
 
 export async function renderTradePage(rows, byId, settings, options, columns, page = 0, details = {}) {
   const plan = exportPlan(rows.length, options, columns), subset = rows.slice(page * plan.perPage, (page + 1) * plan.perPage);
-  const caption = options.captionText || (details.partials === false ? 'No Partials' : 'Partials Accepted');
-  const captionHeight = options.caption ? Math.max(32, plan.cell * .22) : 0;
+  const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
+  const captionFont = Math.min(36, Math.max(22, plan.cell * .2)), captionLineHeight = captionFont * 1.3;
+  ctx.font = `700 ${captionFont}px sans-serif`;
+  const captionLines = options.caption ? wrapCaption(ctx, imageCaption(options, details.partials), plan.width - options.padding * 2) : [];
+  const captionHeight = options.caption ? Math.max(32, plan.cell * .22, captionLines.length * captionLineHeight + 8) : 0;
   const contacts = [ details.farm, details.tag, details.discord ].filter(Boolean).join(' · ');
   const contactHeight = contacts ? 34 : 0, notesHeight = details.notes ? 30 : 0;
   const rowsHeight = Math.ceil(subset.length / plan.columns) * (plan.cell + options.gap) - options.gap;
@@ -51,10 +80,8 @@ export async function renderTradePage(rows, byId, settings, options, columns, pa
   const height = Math.max(100, options.padding * 2 + Math.max(0, rowsHeight) + captionHeight + contactHeight + footerHeight + notesHeight);
   const requested = options.quality;
   const scale = Math.min(requested, Math.sqrt(16e6 / (plan.width * height)), 16384 / Math.max(plan.width, height));
-  const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.floor(plan.width * scale));
   canvas.height = Math.max(1, Math.floor(height * scale));
-  const ctx = canvas.getContext('2d');
   ctx.scale(scale, scale);
   ctx.fillStyle = options.background;
   ctx.fillRect(0, 0, plan.width, height);
@@ -68,11 +95,14 @@ export async function renderTradePage(rows, byId, settings, options, columns, pa
   }
   function drawCaption(y) {
     ctx.fillStyle = options.text;
-    ctx.font = `700 ${Math.min(36, Math.max(22, plan.cell * .2))}px sans-serif`;
+    ctx.font = `700 ${captionFont}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.shadowColor = '#000b';
     ctx.shadowBlur = 5;
-    ctx.fillText(fit(ctx, caption, plan.width - base * 2), plan.width / 2, y + captionHeight * .72);
+    ctx.textBaseline = 'middle';
+    const inset = (captionHeight - captionLines.length * captionLineHeight) / 2;
+    captionLines.forEach((line, i) => ctx.fillText(line, plan.width / 2, y + inset + (i + .5) * captionLineHeight));
+    ctx.textBaseline = 'alphabetic';
     ctx.textAlign = 'left';
     ctx.shadowBlur = 0;
   }

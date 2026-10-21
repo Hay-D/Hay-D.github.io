@@ -12,11 +12,15 @@ import { selectionRows, selectionEdit, pruneSelectionEdits, commitSelectionPrice
 
 import { readPreferences, writePreferences, setGlobalLevel, onPreferencesChange } from './preferences.js';
 
-import { imageDefaults, editorDefaults, editorColumns, imageGrid, itemsAtLevel, serviceItems, materialSetItems, materialCounts, materialGroups, colorPresets, playerLevel, sortRows, selectedRows, paymentItems, priceLabel, paymentSummary, tradeOverview, listText, validateImage, restoreImageSettings, itemPrice, checkedPrice, readLegacyBackup } from './editor-core.js';
+import { imageDefaults, editorDefaults, editorColumns, imageGrid, itemsAtLevel, serviceItems, materialSetItems, materialCounts, materialGroups, colorPresets, playerLevel, sortRows, selectedRows, paymentItems, priceLabel, paymentSummary, tradeOverview, listText, captionPartials, imageCaption, validateImage, restoreImageSettings, itemPrice, checkedPrice, readLegacyBackup } from './editor-core.js';
 
 import { renderTradePage, exportPlan, pngBlob } from './trade-renderer.js';
 
 import { makeZip } from '../scanner/zip.js';
+
+import { rankPicker, rememberAddition } from './picker-usage.js';
+
+import { loadMarketPrices, marketRows } from './market-prices.js';
 
 const $ = id => document.getElementById(id);
 
@@ -53,6 +57,8 @@ draft.image = restoreImageSettings(draft.image || {
 let catalog = [], byId = new Map, selection = new Set, selecting = false, columns = 4;
 
 let refreshLevelView = null;
+
+let pickerHistory = {}, pickerOpenedAt = Date.now();
 
 let undoStack = [], redoStack = [], toastTimer, dragId = null, touchDrag = null, pickerCategory = 'All', pickerLimit = 50, scannerActive = false;
 
@@ -99,7 +105,7 @@ function save() {
   $('save-status').dataset.temporary = String(selectionEdits.size > 0);
 }
 
-function modal(title, html, {wide: wide = false, back: back = false} = {}) {
+function modal(title, html, {wide: wide = false, back: back = false, prices = false} = {}) {
   refreshLevelView = null;
   const host = $('modal-content');
   host.onclick = null;
@@ -107,6 +113,7 @@ function modal(title, html, {wide: wide = false, back: back = false} = {}) {
   host.innerHTML = html;
   $('modal-title').textContent = title;
   $('modal').classList.toggle('wide', wide);
+  $('modal').classList.toggle('prices-dialog', prices);
   $('modal-back').hidden = !back;
   if (!$('modal').open) $('modal').showModal();
   $('modal').scrollTop = 0;
@@ -316,11 +323,12 @@ function render(rebuild = true) {
       button.innerHTML = selection.has(row.id) ? icon('check') : icon('plus');
     }
   }
-  const caption = image.captionText || (draft.partials ? 'Partials Accepted' : 'No Partials');
+  const caption = imageCaption(image, draft.partials);
   for (const position of [ 'top', 'bottom' ]) {
     const input = $('caption-' + position);
     input.hidden = !image.caption || image.captionPosition !== position;
     if (document.activeElement !== input) input.value = caption;
+    fitCaption(input);
   }
   const contact = [ settings.farm, settings.tag, settings.discord ].filter(Boolean).join(' · ');
   $('image-contact').hidden = !contact;
@@ -374,14 +382,23 @@ document.addEventListener('click', (event => {
   if (target && !target.disabled) target.click();
 }));
 
-for (const position of [ 'top', 'bottom' ]) $('caption-' + position).onchange = event => change((() => draft.image.captionText = event.target.value.trim().slice(0, 160)));
+function fitCaption(input) {
+  if (input.hidden) return;
+  input.style.height = 'auto';
+  input.style.height = input.scrollHeight + 'px';
+}
 
-for (const id of [ 'caption-top', 'caption-bottom' ]) $(id).onkeydown = event => {
-  if (event.key === 'Enter') {
-    event.preventDefault();
-    event.target.blur();
-  }
-};
+function applyCaption(value) {
+  draft.image = validateImage({...draft.image, captionText: value});
+  const partials = captionPartials(draft.image.captionText);
+  if (partials !== null) draft.partials = partials;
+}
+
+for (const position of [ 'top', 'bottom' ]) {
+  const input = $('caption-' + position);
+  input.oninput = () => fitCaption(input);
+  input.onchange = event => change(() => applyCaption(event.target.value));
+}
 
 $('image-contact').onclick = () => settingsPanel('Farm');
 
@@ -729,6 +746,8 @@ onPreferencesChange((value => {
 }));
 
 function picker() {
+  pickerHistory = storage.get('picker-usage', {});
+  pickerOpenedAt = Date.now();
   pickerCategory = 'All';
   pickerLimit = 50;
   modal('Add items', `<div class="picker-head"><div class="search-wrap">${icon('search')}<input id="picker-search" type="search" placeholder="Find an item" aria-label="Find an item"></div><label class="picker-level">Level<input id="picker-level" data-global-level type="number" min="1" max="999" value="${settings.level ?? ''}" placeholder="All" aria-label="Your Hay Day level"></label></div><div class="picker-controls"><div class="picker-categories" id="picker-tabs"></div><label class="picker-qty">Qty<input id="picker-quantity" value="${settings.defaultQuantity}" inputmode="numeric" aria-label="Quantity to add"></label></div><div class="picker-grid" id="picker-grid"></div><div class="picker-footer"><button class="text-button" id="picker-import">Paste list</button><button class="text-button" id="picker-more">Show more</button><button class="button primary" id="picker-done">Done</button></div>`, {
@@ -771,10 +790,10 @@ function picker() {
 
 function renderPicker() {
   const query = $('picker-search').value.trim().toLowerCase(), resolved = resolveItem(query, catalog);
-  $('picker-tabs').innerHTML = [ 'All', 'Favorites', 'Sets', 'Materials', 'Products', 'Animal goods', 'Crops', 'Tools', 'Services', 'New' ].map((name => `<button class="${pickerCategory === name ? 'active' : ''}" data-category="${e(name)}">${e(name)}</button>`)).join('');
+  $('picker-tabs').innerHTML = [ 'All', 'Favorites', 'Sets', 'Materials', 'Products', 'Animal goods', 'Animal feed', 'Crops', 'Tools', 'Services', 'New' ].map((name => `<button class="${pickerCategory === name ? 'active' : ''}" data-category="${e(name)}">${e(name)}</button>`)).join('');
   const items = catalog.filter((item => (settings.level === null || item.level <= settings.level) && (pickerCategory === 'All' || item.category === pickerCategory || pickerCategory === 'Favorites' && settings.favorites.includes(item.id) || pickerCategory === 'New' && item.new) && (!query || `${item.name} ${item.id} ${item.machine || ''} ${item.group || ''}`.toLowerCase().includes(query) || item.id === resolved?.id)));
-  const popular = [ 'beeswax', 'bolt', 'plank', 'duct-tape', 'diamond-ring', 'blanket', 'necklace', 'bem-set', 'sem-set', 'lem-set', 'butter', 'cheese', 'help' ];
-  items.sort(((a, b) => (popular.includes(a.id) ? popular.indexOf(a.id) : 999) - (popular.includes(b.id) ? popular.indexOf(b.id) : 999) || a.level - b.level || a.name.localeCompare(b.name)));
+  if (pickerCategory === 'All') items.splice(0, items.length, ...rankPicker(items, pickerHistory, settings.favorites, pickerOpenedAt));
+  else items.sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
   $('picker-grid').innerHTML = items.slice(0, pickerLimit).map((item => {
     const row = draft.items.find((row => row.id === item.id)), price = defaultPrice(item);
     return `<button class="picker-item" data-pick="${item.id}" aria-label="Add ${e(item.name)}"><span class="item-level">Lv. ${item.level}</span>${row ? `<span class="picker-added">${icon('check')}</span>` : ''}<img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="${e(item.image)}" alt="" loading="lazy"><strong>${e(item.name)}</strong><small>${item.bundle ? '1 set' : priceLabel(price)}</small></button>`;
@@ -785,6 +804,7 @@ function renderPicker() {
 function pick(id) {
   try {
     add(id, parseQuantity($('picker-quantity').value));
+    storage.set('picker-usage', rememberAddition(storage.get('picker-usage', {}), id));
     renderPicker();
   } catch (error) {
     toast(error.message);
@@ -861,8 +881,8 @@ function settingsPanel(section = 'Home') {
   const host = $('settings-section'), image = draft.image;
   if (section === 'About') host.innerHTML = aboutContent();
   if (section === 'Image') {
-    host.innerHTML = `<h3>Color</h3><div class="preset-grid">${colorPresets.map(((preset, i) => `<button class="preset-swatch ${preset.background === image.background ? 'active' : ''}" data-preset="${i}" aria-label="${preset.name} color" style="--swatch-border:${preset.border}"><span style="background:${preset.background};color:${preset.text}"><i>3k</i><i>8</i></span><small>${preset.name}</small></button>`)).join('')}</div><h3>Layout</h3><label class="settings-row"><span>Image columns<small>Default: 4 on phones, Auto on larger screens.</small></span><select id="image-layout"><option value="auto">Auto</option>${[ 1, 2, 3, 4, 5, 6, 8, 10, 12 ].map((n => `<option value="${n}">${n} columns</option>`)).join('')}</select></label><label class="settings-row"><span>Show item names</span><input type="checkbox" data-image-flag="names" ${image.names ? 'checked' : ''}></label><h3>Caption</h3><label class="field-label"><input id="image-caption-text" maxlength="160" value="${e(image.captionText)}" placeholder="Partials Accepted" aria-label="Caption text"></label><label class="settings-row"><span>Position</span><select id="caption-position"><option value="bottom">Below items</option><option value="top">Above items</option><option value="off">Hidden</option></select></label><details class="advanced"><summary>More image options</summary><div class="inline-colors">${[ 'background', 'border', 'text' ].map((key => `<label>${key[0].toUpperCase() + key.slice(1)}<input type="color" data-color="${key}" value="${image[key]}"></label>`)).join('')}</div><h3>Show</h3><div class="check-grid">${[ [ 'prices', 'Prices' ], [ 'quantities', 'Quantities' ], [ 'totals', 'Totals' ], [ 'payment', 'Payment item' ], [ 'simplify', 'Simplify prices' ] ].map((([key, label]) => `<label class="toggle-label"><input type="checkbox" data-image-flag="${key}" ${image[key] ? 'checked' : ''}>${label}</label>`)).join('')}</div><label class="settings-row"><span>Image width</span><select id="image-width">${[ 600, 1e3, 1400, 1800, 2400 ].map((n => `<option value="${n}">${n}px</option>`)).join('')}</select></label><label class="settings-row"><span>Quality</span><select id="image-quality"><option value="1">Standard</option><option value="2">High</option><option value="3">Maximum</option></select></label><div class="form-grid"><label class="field-label">Padding<input id="image-padding" type="number" min="0" max="40" value="${image.padding}"></label><label class="field-label">Gap<input id="image-gap" type="number" min="0" max="16" value="${image.gap}"></label></div></details>`;
-    $('image-layout').value = image.layout === 'fixed' ? image.columns : image.layout === 'device' && innerWidth <= 680 ? 4 : 'auto';
+    host.innerHTML = `<h3>Color</h3><div class="preset-grid">${colorPresets.map(((preset, i) => `<button class="preset-swatch ${preset.background === image.background ? 'active' : ''}" data-preset="${i}" aria-label="${preset.name} color" style="--swatch-border:${preset.border}"><span style="background:${preset.background};color:${preset.text}"><i>3k</i><i>8</i></span><small>${preset.name}</small></button>`)).join('')}</div><h3>Layout</h3><label class="settings-row"><span>Image columns<small>Default: Auto.</small></span><select id="image-layout"><option value="auto">Auto</option>${[ 1, 2, 3, 4, 5, 6, 8, 10, 12 ].map((n => `<option value="${n}">${n} columns</option>`)).join('')}</select></label><label class="settings-row"><span>Show item names</span><input type="checkbox" data-image-flag="names" ${image.names ? 'checked' : ''}></label><h3>Caption</h3><label class="field-label"><textarea id="image-caption-text" maxlength="160" rows="3" placeholder="Partials Accepted" aria-label="Caption text">${e(imageCaption(image, draft.partials))}</textarea></label><label class="settings-row"><span>Position</span><select id="caption-position"><option value="bottom">Below items</option><option value="top">Above items</option><option value="off">Hidden</option></select></label><details class="advanced"><summary>More image options</summary><div class="inline-colors">${[ 'background', 'border', 'text' ].map((key => `<label class="image-color-field"><span>${key[0].toUpperCase() + key.slice(1)}</span><span class="image-color-inputs"><input type="color" data-color="${key}" value="${image[key]}" aria-label="${key} color"><input class="image-color-hex" data-color-hex="${key}" value="${image[key]}" maxlength="7" placeholder="#222222" spellcheck="false" aria-label="${key} hex code"></span></label>`)).join('')}</div><h3>Show</h3><div class="check-grid">${[ [ 'prices', 'Prices' ], [ 'quantities', 'Quantities' ], [ 'totals', 'Totals' ], [ 'payment', 'Payment item' ], [ 'simplify', 'Simplify prices' ] ].map((([key, label]) => `<label class="toggle-label"><input type="checkbox" data-image-flag="${key}" ${image[key] ? 'checked' : ''}>${label}</label>`)).join('')}</div><label class="settings-row"><span>Image width</span><select id="image-width">${[ 600, 1e3, 1400, 1800, 2400 ].map((n => `<option value="${n}">${n}px</option>`)).join('')}</select></label><label class="settings-row"><span>Quality</span><select id="image-quality"><option value="1">Standard</option><option value="2">High</option><option value="3">Maximum</option></select></label><div class="form-grid"><label class="field-label">Padding<input id="image-padding" type="number" min="0" max="40" value="${image.padding}"></label><label class="field-label">Gap<input id="image-gap" type="number" min="0" max="16" value="${image.gap}"></label></div></details>`;
+    $('image-layout').value = image.layout === 'fixed' ? image.columns : 'auto';
     $('caption-position').value = image.caption ? image.captionPosition : 'off';
     $('image-width').value = image.width;
     $('image-quality').value = Math.round(image.quality);
@@ -879,9 +899,31 @@ function settingsPanel(section = 'Home') {
       draft.image.caption = event.target.value !== 'off';
       if (draft.image.caption) draft.image.captionPosition = event.target.value;
     }));
-    for (const [id, key] of [ [ 'image-caption-text', 'captionText' ], [ 'image-width', 'width' ], [ 'image-quality', 'quality' ], [ 'image-padding', 'padding' ], [ 'image-gap', 'gap' ] ]) $(id).onchange = event => update(key, event.target.value);
+    $('image-caption-text').onchange = event => change(() => applyCaption(event.target.value));
+    for (const [id, key] of [ [ 'image-width', 'width' ], [ 'image-quality', 'quality' ], [ 'image-padding', 'padding' ], [ 'image-gap', 'gap' ] ]) $(id).onchange = event => update(key, event.target.value);
     host.querySelectorAll('[data-image-flag]').forEach((input => input.onchange = () => update(input.dataset.imageFlag, input.checked)));
-    host.querySelectorAll('[data-color]').forEach((input => input.onchange = () => update(input.dataset.color, input.value)));
+    host.querySelectorAll('[data-color]').forEach(input => input.onchange = () => {
+      update(input.dataset.color, input.value);
+      host.querySelector(`[data-color-hex="${input.dataset.color}"]`).value = input.value;
+    });
+    host.querySelectorAll('[data-color-hex]').forEach(input => {
+      input.oninput = () => {input.setCustomValidity(''); input.removeAttribute('aria-invalid');};
+      input.onchange = () => {
+        const raw = input.value.trim().replace(/^#/, '');
+        if (!/^(?:[a-f0-9]{3}|[a-f0-9]{6})$/i.test(raw)) {
+          input.setCustomValidity('Use a hex color, such as #222222.');
+          input.setAttribute('aria-invalid', 'true');
+          input.reportValidity();
+          return;
+        }
+        const color = '#' + (raw.length === 3 ? [...raw].map(c => c + c).join('') : raw).toLowerCase();
+        input.setCustomValidity('');
+        input.removeAttribute('aria-invalid');
+        input.value = color;
+        update(input.dataset.colorHex, color);
+        host.querySelector(`[data-color="${input.dataset.colorHex}"]`).value = color;
+      };
+    });
     host.querySelectorAll('[data-preset]').forEach((button => button.onclick = () => {
       const {name: name, ...colors} = colorPresets[Number(button.dataset.preset)];
       change((() => draft.image = {
@@ -993,24 +1035,76 @@ $('open-farm').onclick = () => {
 $('sort-menu').onclick = () => settingsPanel('Defaults');
 
 function editCaption(notes = false) {
-  modal(notes ? 'Trade note' : 'Caption', `<label class="field-label"><textarea id="quick-caption" maxlength="${notes ? 200 : 160}" aria-label="${notes ? 'Trade note' : 'Caption'}">${e(notes ? draft.notes : draft.image.captionText || (draft.partials ? 'Partials Accepted' : 'No Partials'))}</textarea></label><div class="dialog-actions"><button class="button primary" id="save-caption">Done</button></div>`);
+  modal(notes ? 'Trade note' : 'Caption', `<label class="field-label"><textarea id="quick-caption" maxlength="${notes ? 200 : 160}" aria-label="${notes ? 'Trade note' : 'Caption'}">${e(notes ? draft.notes : imageCaption(draft.image, draft.partials))}</textarea></label><div class="dialog-actions"><button class="button primary" id="save-caption">Done</button></div>`);
   $('save-caption').onclick = () => {
     const value = $('quick-caption').value;
     change((() => {
       if (notes) draft.notes = value; else {
         draft.image.caption = true;
-        draft.image.captionText = value;
+        applyCaption(value);
       }
     }));
     closeModal();
   };
 }
 
+function priceItemDetails(item) {
+  return e(item.bundle ? 'Per set' : item.service ? 'Service' : `Lv. ${item.level} · max ${number(item.maxPrice)}`);
+}
+
+function priceTabs(active) {
+  return `<div class="tabs price-tabs"><button id="prices-book-tab" class="${active === 'saved' ? 'active' : ''}" aria-pressed="${active === 'saved'}">Saved prices</button><button id="prices-market-tab" class="${active === 'market' ? 'active' : ''}" aria-pressed="${active === 'market'}">Trading prices</button><button id="prices-calc-tab" class="${active === 'payment' ? 'active' : ''}" aria-pressed="${active === 'payment'}">Payment item</button></div>`;
+}
+
+function bindPriceTabs() {
+  $('prices-book-tab').onclick = priceBook;
+  $('prices-market-tab').onclick = () => tradingPrices();
+  $('prices-calc-tab').onclick = () => paymentPicker();
+}
+
+async function tradingPrices(reload = false) {
+  modal('Prices', `${priceTabs('market')}
+    <div class="price-panel">
+      <div class="price-book-controls"><div class="search-wrap">${icon('search')}<input id="market-search" type="search" placeholder="Find an item" aria-label="Find trading price"></div><label class="compact-level">Level<input id="market-level" data-global-level type="number" min="1" max="999" value="${settings.level ?? ''}" placeholder="All" aria-label="Trading price filter level"></label></div>
+      <div class="market-source"><a href="https://hayday.info/trading" target="_blank" rel="noopener noreferrer">hayday.info ↗</a><span id="market-updated">Loading…</span></div>
+      <p class="market-note">7-day averages of posted prices · coins each</p>
+      <div class="editor-price-list market-prices" id="market-prices" aria-live="polite"><p class="empty-note">Loading trading prices…</p></div>
+    </div>
+    <div class="dialog-actions"><button class="text-button" id="market-more" hidden>Show more</button><button class="button primary" id="prices-done">Done</button></div>`, {prices: true});
+  bindPriceTabs();
+  $('prices-done').onclick = closeModal;
+  bindLevel($('market-level'));
+  const host = $('market-prices'), status = $('market-updated');
+  try {
+    const data = await loadMarketPrices(reload);
+    if (!host.isConnected) return;
+    status.textContent = 'Updated ' + new Date(data.updatedAt).toLocaleDateString(undefined, {day: 'numeric', month: 'short', year: 'numeric'});
+    status.title = new Date(data.updatedAt).toLocaleString();
+    let limit = 50;
+    const format = value => value === null ? '—' : number(value);
+    const average = (label, value, posts) => `<span class="market-price-value" title="${posts} ${label.toLowerCase()} posts"><small>${label}</small><img src="assets/services/coin.png" alt=""><output aria-label="${label} average: ${format(value)} coins">${format(value)}</output></span>`;
+    const render = () => {
+      const rows = marketRows(data, catalog, $('market-search').value, settings.level);
+      host.innerHTML = rows.length ? rows.slice(0, limit).map(row => `<article class="editor-price-row market-price-row"><img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="${e(row.item.image)}" alt="" loading="lazy"><div><strong>${e(row.item.name)}</strong><small>${priceItemDetails(row.item)}</small></div><div class="market-price-values">${average('Buy', row.buy, row.buyPosts)}${average('Sell', row.sell, row.sellPosts)}</div></article>`).join('') : '<p class="empty-note">No prices for these items.</p>';
+      $('market-more').hidden = rows.length <= limit;
+    };
+    refreshLevelView = render;
+    $('market-search').oninput = () => {limit = 50; render();};
+    $('market-more').onclick = () => {limit += 50; render();};
+    render();
+  } catch {
+    if (!host.isConnected) return;
+    status.textContent = '';
+    host.innerHTML = '<p class="empty-note">Trading prices could not load.</p><button class="button secondary" id="market-retry">Try again</button>';
+    $('market-retry').onclick = () => tradingPrices(true);
+  }
+}
+
 function priceBook() {
-  modal('Prices', `<div class="tabs"><button class="active" id="prices-book-tab">Saved prices</button><button id="prices-calc-tab">Payment item</button></div><div class="price-book-controls"><div class="search-wrap">${icon('search')}<input id="price-search" type="search" placeholder="Find an item" aria-label="Find saved price"></div><label class="compact-level">Level<input id="price-level" data-global-level type="number" min="1" max="999" value="${settings.level ?? ''}" placeholder="All" aria-label="Price filter level"></label></div><div class="editor-price-list" id="price-list"></div><div class="dialog-actions"><button class="text-button" id="save-current-prices">Save current prices</button><button class="button primary" id="prices-done">Done</button></div>`);
+  modal('Prices', `${priceTabs('saved')}<div class="price-panel"><div class="price-book-controls"><div class="search-wrap">${icon('search')}<input id="price-search" type="search" placeholder="Find an item" aria-label="Find saved price"></div><label class="compact-level">Level<input id="price-level" data-global-level type="number" min="1" max="999" value="${settings.level ?? ''}" placeholder="All" aria-label="Price filter level"></label></div><div class="editor-price-list" id="price-list"></div></div><div class="dialog-actions"><button class="text-button" id="save-current-prices">Save current prices</button><button class="button primary" id="prices-done">Done</button></div>`, {prices: true});
   const list = () => {
     const text = $('price-search').value.toLowerCase();
-    $('price-list').innerHTML = itemsAtLevel(catalog, settings.level).filter((item => `${item.name} ${item.id}`.toLowerCase().includes(text))).sort(((a, b) => Number(Object.hasOwn(settings.prices, b.id)) - Number(Object.hasOwn(settings.prices, a.id)) || a.name.localeCompare(b.name))).slice(0, 150).map((item => `<label class="editor-price-row"><img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="${e(item.image)}" alt=""><div><strong>${e(item.name)}</strong><small>${item.bundle ? 'Per set' : item.service ? 'Service' : `Lv. ${item.level} · max ${number(item.maxPrice)}`}</small></div><div class="saved-price-input"><img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="assets/services/coin.png" alt="coins"><input data-price-id="${item.id}" value="${e(settings.prices[item.id] ?? '')}" placeholder="" aria-label="Saved ${e(item.name)} price"></div></label>`)).join('') || '<p class="empty-note">No items at this level.</p>';
+    $('price-list').innerHTML = itemsAtLevel(catalog, settings.level).filter((item => `${item.name} ${item.id}`.toLowerCase().includes(text))).sort(((a, b) => Number(Object.hasOwn(settings.prices, b.id)) - Number(Object.hasOwn(settings.prices, a.id)) || a.name.localeCompare(b.name))).slice(0, 150).map((item => `<label class="editor-price-row"><img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="${e(item.image)}" alt=""><div><strong>${e(item.name)}</strong><small>${priceItemDetails(item)}</small></div><div class="saved-price-input"><img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="assets/services/coin.png" alt="coins"><input data-price-id="${item.id}" value="${e(settings.prices[item.id] ?? '')}" placeholder="" aria-label="Saved ${e(item.name)} price"></div></label>`)).join('') || '<p class="empty-note">No items at this level.</p>';
   };
   refreshLevelView = list;
   list();
@@ -1038,7 +1132,7 @@ function priceBook() {
     save();
     toast('Prices saved');
   };
-  $('prices-calc-tab').onclick = () => paymentPicker();
+  bindPriceTabs();
   $('prices-done').onclick = closeModal;
 }
 
@@ -1049,8 +1143,9 @@ $('open-prices').onclick = () => {
 
 function paymentPicker(back = false) {
   const summary = paymentSummary(scope(), byId, settings.calculationItem);
-  modal('Payment item', `<div class="calc-summary" id="calc-summary"></div><div class="calc-controls"><div class="search-wrap">${icon('search')}<input id="payment-search" type="search" placeholder="Find an item" aria-label="Find payment item"></div><select id="payment-sort" aria-label="Sort payment items"><option value="high">Highest price</option><option value="low">Lowest price</option><option value="level">Highest at my level</option><option value="name">Name</option></select></div><label class="payment-level" id="payment-level-field">My level<input id="payment-level" data-global-level type="number" min="1" max="999" value="${settings.level ?? ''}" placeholder="All" aria-label="Payment filter level"></label><div class="payment-grid" id="payment-grid"></div><p class="helper" id="payment-scope" style="margin-top:13px">${selection.size ? selection.size + ' selected items' : number(summary.units) + ' items'} · ${number(summary.coins)} coins</p><div class="dialog-actions"><button class="button primary" id="payment-done">Done</button></div>`, {
-    back: back
+  modal(back ? 'Payment item' : 'Prices', `${back ? '' : priceTabs('payment')}<div class="price-panel"><div class="calc-summary" id="calc-summary"></div><div class="calc-controls"><div class="search-wrap">${icon('search')}<input id="payment-search" type="search" placeholder="Find an item" aria-label="Find payment item"></div><select id="payment-sort" aria-label="Sort payment items"><option value="high">Highest price</option><option value="low">Lowest price</option><option value="level">Highest at my level</option><option value="name">Name</option></select></div><label class="payment-level" id="payment-level-field">My level<input id="payment-level" data-global-level type="number" min="1" max="999" value="${settings.level ?? ''}" placeholder="All" aria-label="Payment filter level"></label><div class="payment-grid" id="payment-grid"></div></div><div class="dialog-actions"><p class="helper" id="payment-scope">${selection.size ? selection.size + ' selected items' : number(summary.units) + ' items'} · ${number(summary.coins)} coins</p><button class="button primary" id="payment-done">Done</button></div>`, {
+    back: back,
+    prices: true
   });
   const renderPayment = () => {
     const total = paymentSummary(scope(), byId, settings.calculationItem);
@@ -1072,6 +1167,7 @@ function paymentPicker(back = false) {
       renderPayment();
     }
   };
+  if (!back) bindPriceTabs();
   $('payment-done').onclick = closeModal;
 }
 
@@ -1231,6 +1327,22 @@ function plainText(rows = scope()) {
   return listText(rows, byId, settings.textFormat, separator());
 }
 
+function paymentText(summary) {
+  if (!summary.item || !Number.isFinite(summary.equivalent)) return '';
+  let name = summary.item.name;
+  if (Number(summary.equivalent.toFixed(2)) !== 1) {
+    // Keep existing plurals and material names such as milk, wool and feed.
+    const unchanged = /(?:s|\b(?:wheat|corn|bread|milk|cream|sugar|sugarcane|popcorn|butter|bacon|cheese|indigo|wool|cotton|fabric|syrup|ore|meat|coal|cacao|honey|chamomile|sesame|toffee|chocolate|sauce|rice|sushi|garlic|oil|mayonnaise|mix|toast|curd|pasta|gnocchi|linguine|marmalade|lasagna|coleslaw|salsa|ginger|brittle|fish|tea|broccoli|carbonara|mint|clay|falafel|kimchi|parmesan|fudge|fruit|yogurt|compote|stew|perfume|porridge|feed))$/i;
+    if (/dress$/i.test(name)) name += 'es';
+    else if (!unchanged.test(name)) {
+      if (/[^aeiou]y$/i.test(name)) name = name.slice(0, -1) + 'ies';
+      else if (/(?:leaf|scarf)$/i.test(name)) name = name.slice(0, -1) + 'ves';
+      else name += /(?:ch|sh|x|z|potato|tomato)$/i.test(name) ? 'es' : 's';
+    }
+  }
+  return `${number(summary.equivalent)} ${name}`;
+}
+
 function textExport() {
   const rows = scope();
   if (!rows.length) return toast('Add items first');
@@ -1243,8 +1355,9 @@ function textExport() {
   show('plain-text-tab', plainText(rows));
   $('plain-text-tab').onclick = () => show('plain-text-tab', plainText(rows));
   $('discord-text-tab').onclick = () => {
-    const total = totals(rows, byId);
-    show('discord-text-tab', [ `**${draft.mode === 'buy' ? 'BUYING' : 'SELLING'}${settings.farm ? ' · ' + settings.farm : ''}**`, plainText(rows), `**${number(total.coins)} coins · ${number(total.units)} items**`, draft.image.captionText || (draft.partials ? 'Partials accepted' : 'No partials'), settings.tag, settings.discord, draft.notes ].filter(Boolean).join('\n'));
+    const total = paymentSummary(rows, byId, settings.calculationItem);
+    const summary = [ `${number(total.coins)} coins`, `${number(total.units)} items`, paymentText(total) ].filter(Boolean).join(' · ');
+    show('discord-text-tab', [ `**${draft.mode === 'buy' ? 'BUYING' : 'SELLING'}${settings.farm ? ' · ' + settings.farm : ''}**`, plainText(rows), `**${summary}**`, imageCaption(draft.image, draft.partials), settings.tag, settings.discord, draft.notes ].filter(Boolean).join('\n'));
   };
   $('import-text-tab').onclick = () => show('import-text-tab', serializeItems(rows));
   $('text-copy').onclick = async () => {
@@ -1503,6 +1616,7 @@ async function init() {
     if (!response.ok) throw new Error('Items could not load');
     const base = (await response.json()).items;
     catalog = [ ...base, ...serviceItems, ...materialSetItems(base) ];
+    for (const item of catalog) if (item.category === 'Animal feed') item.image = `assets/feeds/${item.id}.png`;
     byId = new Map(catalog.map((item => [ item.id, item ])));
     try {
       settings = checkedSettings(readPreferences());

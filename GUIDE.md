@@ -28,12 +28,16 @@ Tap the list name to rename or save it. The bookmark button opens saved lists. O
 
 ## Scan photos
 
-1. Open **Scanner** and download the model once. It is kept on your device.
+1. Open **Scanner**. It uses bundled item and number artwork, with no model download.
 2. Upload or drag in PNG, JPG or WebP barn, silo or roadside shop photos. Remove duplicates or unwanted photos before scanning.
 3. Check **Crop & alignment** if the grid looks wrong. Choose a layout, adjust the crop or rows and columns, skip cropped edge rows, and apply the grid to other photos if needed.
 4. Press **Scan photos**. In **Review**, check each crop, item name, quantity and price. Tap the crop to enlarge it. Correct readings, remove rows or add a result manually. Filter rows by their review status. Confirm rows you have checked, or use **Confirm valid**.
 5. Press **Create trade**, then confirm **Import** to replace or merge the current list. You can also copy or download the results. Repeated items keep the largest quantity found in overlapping photos.
 
-**Excluded items** leaves chosen goods out of the results. Scanner settings share your farm level and prices, and let you skip zero stock, show prices, use default prices and save edited prices. **Item code & corrections** also lets you export checked crops. You can stop a scan or cancel a model download. Model settings let you remove the cached model.
+**Excluded items** leaves chosen goods out of the results. Scanner settings share your farm level and prices, and let you skip zero stock, show prices, use default prices and save edited prices. **Item code & corrections** also lets you export checked crops. You can stop a scan at any time. Photos are processed on your device.
 
 Settings → About has the privacy policy, terms and version history.
+
+Trading prices, between Saved prices and Payment item, shows seven-day buy and sell averages from [hayday.info](https://hayday.info/trading). These are posted prices, not confirmed sales. The Pages workflow refreshes them every six hours; the update date is shown. Local previews use the bundled snapshot. Run `npm run update-prices` to refresh it locally.
+
+The All tab learns from item additions on this device. Frequent and recent choices appear first the next time you open the picker. In Image → More image options, enter a hex color beside each color picker.

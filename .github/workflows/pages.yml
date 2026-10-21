@@ -3,6 +3,8 @@ name: Publish HayDex
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '17 */6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -26,6 +28,9 @@ jobs:
         with:
           node-version: '22'
       - uses: actions/configure-pages@v5
+      - name: Refresh trading prices
+        run: npm run update-prices
+        continue-on-error: true
       - run: npm run build
       - uses: actions/upload-pages-artifact@v4
         with:

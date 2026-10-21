@@ -12,9 +12,9 @@ import { checkedPrice, priceLabel, playerLevel, itemsAtLevel } from '../js/edito
 
 import { detectLayout } from './layout.js';
 
-import { modelCells } from './model-preprocess.js';
+import { scannerCells } from './preprocess.js';
 
-import { fetchModel, restoreCachedModel, modelInfo, forgetModel } from './model-loader.js';
+import { startScanner, scannerArtwork } from './recognition.js';
 
 import { makeZip } from './zip.js';
 
@@ -28,9 +28,9 @@ if (embedded) document.body.classList.add('embedded');
 
 let excluded = new Set, refreshLevelView = null;
 
-let catalog = [], byId = new Map, uploads = [], results = [], model = null;
+let catalog = [], byId = new Map, uploads = [], results = [], scanner = null;
 
-let scanning = false, loadingPhotos = false, loadingModel = false, cancelled = false, toastTimer, modelController = null, reviewing = false;
+let scanning = false, loadingPhotos = false, startingScanner = false, cancelled = false, toastTimer, reviewing = false;
 
 let options = {
   skipZero: true,
@@ -91,12 +91,12 @@ $('review-step').onclick = () => viewReview(true);
 $('scanner-tab').onclick = () => viewReview(results.length > 0);
 
 function updateButtons() {
-  const ready = !!model;
-  $('scan-button').disabled = !uploads.length || scanning || loadingPhotos || loadingModel || !ready || !catalog.length;
-  $('fetch-model').disabled = loadingModel;
+  const ready = !!scanner;
+  $('scan-button').disabled = !uploads.length || scanning || loadingPhotos || startingScanner || !ready || !catalog.length;
+  $('scanner-retry').disabled = startingScanner;
   $('add-photos').disabled = scanning || loadingPhotos;
   $('scan-button-label').textContent = uploads.length ? `Scan ${uploads.length} ${uploads.length === 1 ? 'photo' : 'photos'}` : 'Scan photos';
-  $('scan-hint').textContent = !ready && uploads.length ? 'Get the model to scan' : 'Photos stay on your device';
+  $('scan-hint').textContent = startingScanner ? 'Starting scanner…' : 'Photos stay on your device';
 }
 
 function progress(value, message) {
@@ -310,7 +310,7 @@ $('cancel-scan').onclick = () => {
 };
 
 $('scan-button').onclick = async () => {
-  if (scanning || loadingPhotos || loadingModel || !uploads.length || !model) return;
+  if (scanning || loadingPhotos || startingScanner || !uploads.length || !scanner) return;
   scanning = true;
   cancelled = false;
   results = [];
@@ -323,18 +323,18 @@ $('scan-button').onclick = async () => {
   try {
     for (let imageIndex = 0; imageIndex < uploads.length; imageIndex++) {
       if (cancelled) break;
-      const upload = uploads[imageIndex], prepared = modelCells(upload.image, upload.layout, upload.preset);
+      const upload = uploads[imageIndex], prepared = scannerCells(upload.image, upload.layout, upload.preset);
       skipped += prepared.skipped;
       for (let index = 0; index < prepared.cells.length; index++) {
         if (cancelled) break;
         const cell = prepared.cells[index];
         progress((imageIndex + index / prepared.cells.length) / uploads.length * 100, `Photo ${imageIndex + 1} / ${uploads.length} · item ${index + 1} / ${prepared.cells.length}`);
-        const prediction = await model.predict(cell);
+        const prediction = await scanner.predict(cell);
         if (prediction.isZero && options.skipZero) {
           skipped++;
           continue;
         }
-        const id = prediction.ranked[0]?.id || '', known = byId.has(id), confidence = prediction.ranked[0]?.score || 0;
+        const id = prediction.recognized ? prediction.ranked[0]?.id || '' : '', known = byId.has(id), confidence = prediction.ranked[0]?.score || 0;
         results.push({
           key: crypto.randomUUID(),
           id: id,
@@ -349,7 +349,7 @@ $('scan-button').onclick = async () => {
           groupId: upload.groupId,
           confirmed: false,
           enabled: prediction.quantity !== 0,
-          note: !known ? 'Choose a tradeable item' : prediction.quantity === null ? 'Check quantity' : confidence < model.manifest.item_threshold || prediction.quantityConfidence < model.manifest.digit_threshold ? 'Check reading' : '',
+          note: !known ? 'Choose a tradeable item' : prediction.quantity === null ? 'Check quantity' : prediction.uncertain || prediction.quantityConfidence < .85 ? 'Check reading' : '',
           rect: cell.rect
         });
         await new Promise((resolve => setTimeout(resolve, 0)));
@@ -493,7 +493,7 @@ $('confirm-all').onclick = () => {
 
 function chooseItem(row) {
   const item = byId.get(row.id);
-  modal('Choose item', `${row.preview ? `<div class="reading-detail"><img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="${e(row.preview)}" alt="Item and full quantity to review"><div><strong>${e(item?.name || 'Check reading')}</strong><small>Item ${Math.round(row.confidence * 100)}% · quantity ${Math.round(row.quantityConfidence * 100)}%</small></div></div>` : ''}<div class="search-wrap">${icon('search')}<input id="review-item-search" type="search" placeholder="Find an item" aria-label="Find an item"></div><div class="choose-item-grid" id="choose-item-grid"></div>`);
+  modal('Choose item', `${row.preview ? `<div class="reading-detail"><img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="${e(row.preview)}" alt="Item and full quantity to review"><div><strong>${e(item?.name || 'Check reading')}</strong><small>Match ${Math.round(row.confidence * 100)}% · quantity ${Math.round(row.quantityConfidence * 100)}%</small></div></div>` : ''}<div class="search-wrap">${icon('search')}<input id="review-item-search" type="search" placeholder="Find an item" aria-label="Find an item"></div><div class="choose-item-grid" id="choose-item-grid"></div>`);
   const render = () => {
     const query = $('review-item-search').value.toLowerCase();
     let items = itemsAtLevel(catalog, farmLevel()).filter((item => `${item.name} ${item.id}`.toLowerCase().includes(query)));
@@ -572,7 +572,7 @@ function goTrade(action) {
     }, location.origin);
     return;
   }
-  if (scanning || loadingModel) return toast('Wait for the current task');
+  if (scanning || startingScanner) return toast('Wait for the current task');
   try {
     if (action) sessionStorage.setItem('hayday.open-action', action);
     location.href = '../';
@@ -640,52 +640,37 @@ $('export-training').onclick = async () => {
   downloadFile('haydex-corrections.zip', await makeZip(files), 'application/zip');
 };
 
-function modelProgress(state) {
-  $('model-progress').hidden = false;
-  if (state.stage === 'downloading') {
-    $('model-progress-bar').value = state.done / state.total * 95;
-    $('model-progress-text').textContent = `${Math.round(state.done / 1048576)} / ${Math.round(state.total / 1048576)} MB`;
-    $('cancel-model').disabled = false;
-  } else {
-    $('model-progress-bar').value = state.stage === 'saving' ? 96 : 99;
-    $('model-progress-text').textContent = state.stage === 'saving' ? 'Saving on this device…' : 'Starting scanner…';
-    $('cancel-model').disabled = true;
-  }
-}
-
 function ready() {
-  $('model-setup').hidden = true;
-  $('model-status').textContent = 'Ready on device';
-  $('model-dot').classList.add('ready');
+  $('scanner-status').textContent = 'Ready on device';
+  $('scanner-dot').classList.add('ready');
+  $('scanner-error').hidden = true;
+  $('scanner-retry').hidden = true;
   updateButtons();
 }
 
-async function getModel() {
-  if (loadingModel || scanning) return;
-  loadingModel = true;
-  modelController = new AbortController;
-  $('model-error').hidden = true;
-  $('model-setup').hidden = false;
+async function prepareScanner() {
+  if (startingScanner || scanning) return;
+  startingScanner = true;
+  $('scanner-status').textContent = 'Starting…';
+  $('scanner-error').hidden = true;
   updateButtons();
   try {
-    const loaded = await fetchModel(modelProgress, modelController.signal);
-    model = loaded.model;
+    scanner = await startScanner();
+    for (const item of catalog) {
+      const fallback = item.image;
+      Object.defineProperty(item, 'image', {configurable: true, get: () => scannerArtwork(item.id) || fallback});
+    }
     ready();
-    if (!loaded.saved) toast('Ready · storage full, so the model will need reloading');
   } catch (error) {
-    $('model-error').hidden = false;
-    $('model-error').textContent = error.name === 'AbortError' ? 'Download cancelled' : error.message;
-    $('model-progress').hidden = true;
-  } finally {
-    loadingModel = false;
-    modelController = null;
-    updateButtons();
-  }
+    scanner = null;
+    $('scanner-status').textContent = 'Unavailable';
+    $('scanner-error').textContent = error.message || 'Scanner could not start. Please try again.';
+    $('scanner-error').hidden = false;
+    $('scanner-retry').hidden = false;
+  } finally {startingScanner = false; updateButtons();}
 }
 
-$('fetch-model').onclick = getModel;
-
-$('cancel-model').onclick = () => modelController?.abort();
+$('scanner-retry').onclick = () => catalog.length ? prepareScanner() : init();
 
 function saveExclusions(next) {
   if (!storage.set('scanner-excluded-items', [ ...next ])) {
@@ -734,7 +719,7 @@ function exclusionSettings() {
 $('open-exclusions').onclick = exclusionSettings;
 
 function scanSettings() {
-  modal('Scanner settings', `<div class="scanner-settings"><label class="settings-row global-level-row"><span>Farm level<small>Applies everywhere</small></span><input id="scanner-global-level" data-global-level type="number" min="1" max="999" value="${farmLevel() ?? ''}" placeholder="All" aria-label="Global farm level"></label><label class="settings-row"><span>Skip zero stock</span><input id="skip-zero" type="checkbox" ${options.skipZero ? 'checked' : ''}></label><label class="settings-row"><span>Show price controls</span><input id="scan-show-prices" type="checkbox" ${options.showPrices ? 'checked' : ''}></label><label class="settings-row"><span>Use default price<small>For products without a saved price</small></span><input id="scan-default-prices" type="checkbox" ${options.useDefaultPrice ? 'checked' : ''}></label><label class="settings-row"><span>Save edited prices<small>Use them in future scans</small></span><input id="scan-remember-prices" type="checkbox" ${options.rememberPrices ? 'checked' : ''}></label><button class="settings-row exclusion-settings-link" id="settings-exclusions"><span>Excluded items</span><span>${excluded.size} products</span></button><label class="settings-row"><span>Model</span><span class="pill">${model ? 'Ready on device' : 'Not enabled'}</span></label><div class="settings-top-actions" style="margin-top:17px"><button class="button secondary" id="settings-model">${model ? 'Reload model' : 'Get model'}</button><button class="button quiet danger-text" id="forget-model">Remove cached model</button></div><p class="settings-note">Photos are read on your device. Check each result before creating a trade.</p><div class="dialog-actions"><button class="button primary" id="scanner-settings-done">Done</button></div></div>`);
+  modal('Scanner settings', `<div class="scanner-settings"><label class="settings-row global-level-row"><span>Farm level<small>Applies everywhere</small></span><input id="scanner-global-level" data-global-level type="number" min="1" max="999" value="${farmLevel() ?? ''}" placeholder="All" aria-label="Global farm level"></label><label class="settings-row"><span>Skip zero stock</span><input id="skip-zero" type="checkbox" ${options.skipZero ? 'checked' : ''}></label><label class="settings-row"><span>Show price controls</span><input id="scan-show-prices" type="checkbox" ${options.showPrices ? 'checked' : ''}></label><label class="settings-row"><span>Use default price<small>For products without a saved price</small></span><input id="scan-default-prices" type="checkbox" ${options.useDefaultPrice ? 'checked' : ''}></label><label class="settings-row"><span>Save edited prices<small>Use them in future scans</small></span><input id="scan-remember-prices" type="checkbox" ${options.rememberPrices ? 'checked' : ''}></label><button class="settings-row exclusion-settings-link" id="settings-exclusions"><span>Excluded items</span><span>${excluded.size} products</span></button><p class="settings-note">Photos are read on your device. Check each result before creating a trade.</p><div class="dialog-actions"><button class="button primary" id="scanner-settings-done">Done</button></div></div>`);
   for (const [id, key] of [ [ 'scan-show-prices', 'showPrices' ], [ 'scan-default-prices', 'useDefaultPrice' ], [ 'scan-remember-prices', 'rememberPrices' ] ]) $(id).onchange = event => {
     const next = {
       ...options,
@@ -764,30 +749,10 @@ function scanSettings() {
     storage.set('scanner-options', options);
   };
   $('scanner-settings-done').onclick = () => $('modal').close();
-  $('settings-model').onclick = () => {
-    if (scanning || loadingModel) return toast('Wait for the current task');
-    $('modal').close();
-    $('model-setup').hidden = false;
-    getModel();
-  };
-  $('forget-model').onclick = async () => {
-    if (scanning || loadingModel) return toast('Wait for the current task');
-    try {
-      await forgetModel();
-      model = null;
-      $('model-setup').hidden = false;
-      $('model-dot').classList.remove('ready');
-      $('model-status').textContent = 'Not enabled';
-      updateButtons();
-      $('modal').close();
-      toast('Cached model removed');
-    } catch (error) {
-      toast(error.message);
-    }
-  };
+
 }
 
-$('model-settings').onclick = scanSettings;
+$('scanner-settings').onclick = scanSettings;
 
 $('open-settings').onclick = scanSettings;
 
@@ -828,27 +793,15 @@ async function init() {
     const level = farmLevel();
     $('header-level').textContent = level ? 'Lv. ' + level : 'Level';
     renderUploads();
-    loadingModel = true;
-    $('model-status').textContent = 'Checking device…';
-    updateButtons();
-    model = await restoreCachedModel(modelProgress);
-    if (model) ready(); else {
-      $('model-progress').hidden = true;
-      $('model-status').textContent = 'Not enabled';
-      try {
-        const info = await modelInfo();
-        $('model-size').textContent = `${Math.ceil((info.bytes + 12 * 1048576) / 1048576)} MB · saved on this device`;
-      } catch (error) {
-        $('model-error').hidden = false;
-        $('model-error').textContent = error.message;
-      }
-    }
+    await prepareScanner();
   } catch (error) {
     toast(error.message);
-    $('model-progress').hidden = true;
-    $('model-status').textContent = 'Not enabled';
+    $('scanner-status').textContent = 'Unavailable';
+    $('scanner-error').hidden = false;
+    $('scanner-error').textContent = error.message;
+    $('scanner-retry').hidden = false;
   } finally {
-    loadingModel = false;
+    startingScanner = false;
     updateButtons();
   }
 }
