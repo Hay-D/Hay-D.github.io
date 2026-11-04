@@ -38,6 +38,6 @@ Tap the list name to rename or save it. The bookmark button opens saved lists. O
 
 Settings → About has the privacy policy, terms and version history.
 
-Trading prices, between Saved prices and Payment item, shows seven-day buy and sell averages from [hayday.info](https://hayday.info/trading). These are posted prices, not confirmed sales. The Pages workflow refreshes them every six hours; the update date is shown. Local previews use the bundled snapshot. Run `npm run update-prices` to refresh it locally.
+Trading prices, between Saved prices and Payment item, shows seven-day buy and sell averages from [hayday.info](https://hayday.info/trading). These are posted prices, not confirmed sales. The Pages workflow refreshes them once daily; the update date is shown. Local previews use the bundled snapshot. Run `npm run update-prices` to refresh it locally.
 
 The All tab learns from item additions on this device. Frequent and recent choices appear first the next time you open the picker. In Image → More image options, enter a hex color beside each color picker.

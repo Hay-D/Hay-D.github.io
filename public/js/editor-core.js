@@ -152,7 +152,7 @@ export function sortRows(rows, byId, order = 'quantity') {
   if (order === 'manual') return [ ...rows ];
   return [ ...rows ].sort(((a, b) => {
     const itemA = byId.get(a.id), itemB = byId.get(b.id);
-    const delta = order === 'quantity' ? b.quantity - a.quantity : order === 'price' ? unitPrice(b, itemB) - unitPrice(a, itemA) : order === 'total' ? unitPrice(b, itemB) * b.quantity - unitPrice(a, itemA) * a.quantity : 0;
+    const delta = order === 'quantity' ? b.quantity - a.quantity : order === 'price' ? unitPrice(b, itemB) - unitPrice(a, itemA) : order === 'total' ? unitPrice(b, itemB) * b.quantity - unitPrice(a, itemA) * a.quantity : order === 'level-high' ? itemB.level - itemA.level : order === 'level-low' ? itemA.level - itemB.level : 0;
     return delta || itemA.name.localeCompare(itemB.name);
   }));
 }

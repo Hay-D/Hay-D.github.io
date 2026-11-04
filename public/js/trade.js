@@ -276,6 +276,8 @@ function render(rebuild = true) {
     quantity: 'Quantity',
     price: 'Price',
     total: 'Value',
+    'level-high': 'Highest level',
+    'level-low': 'Lowest level',
     name: 'Name',
     manual: 'Manual'
   }[settings.sortOrder];
@@ -945,7 +947,7 @@ function settingsPanel(section = 'Home') {
     $('trade-notes').onchange = event => change((() => draft.notes = event.target.value.slice(0, 200)));
   }
   if (section === 'Defaults') {
-    host.innerHTML = `<label class="settings-row"><span>Item order</span><select id="tile-sort"><option value="quantity">Highest quantity</option><option value="price">Highest price each</option><option value="total">Highest total value</option><option value="name">Name</option><option value="manual">Manual</option></select></label><label class="settings-row"><span>Default quantity</span><input id="default-quantity" value="${settings.defaultQuantity}" inputmode="numeric"></label><label class="settings-row"><span>Default price</span><input id="default-price" value="${e(settings.defaultPrice)}" aria-label="Default price" style="width:100px;text-align:right"></label><p class="settings-note">3k = 3,000 coins each · 5x = 5 × shop max</p><div class="settings-top-actions"><button class="button secondary" id="defaults-prices">Saved prices</button><button class="button secondary" id="defaults-sets">Material sets</button></div><p class="editor-error" id="defaults-error"></p>`;
+    host.innerHTML = `<label class="settings-row"><span>Item order</span><select id="tile-sort"><option value="quantity">Highest quantity</option><option value="price">Highest price each</option><option value="total">Highest total value</option><option value="level-high">Highest level</option><option value="level-low">Lowest level</option><option value="name">Name</option><option value="manual">Manual</option></select></label><label class="settings-row"><span>Default quantity</span><input id="default-quantity" value="${settings.defaultQuantity}" inputmode="numeric"></label><label class="settings-row"><span>Default price</span><input id="default-price" value="${e(settings.defaultPrice)}" aria-label="Default price" style="width:100px;text-align:right"></label><p class="settings-note">3k = 3,000 coins each · 5x = 5 × shop max</p><div class="settings-top-actions"><button class="button secondary" id="defaults-prices">Saved prices</button><button class="button secondary" id="defaults-sets">Material sets</button></div><p class="editor-error" id="defaults-error"></p>`;
     $('tile-sort').value = settings.sortOrder;
     $('tile-sort').onchange = event => {
       settings.sortOrder = event.target.value;
@@ -1484,7 +1486,7 @@ function checkedSettings(value = {}) {
     maxPrice: 1
   });
   next.level = playerLevel(value.level);
-  next.sortOrder = [ 'quantity', 'price', 'total', 'name', 'manual' ].includes(next.sortOrder) ? next.sortOrder : 'quantity';
+  next.sortOrder = [ 'quantity', 'price', 'total', 'level-high', 'level-low', 'name', 'manual' ].includes(next.sortOrder) ? next.sortOrder : 'quantity';
   next.favorites = Array.isArray(next.favorites) ? next.favorites.filter((id => byId.has(id))) : [];
   next.calculationItem = byId.get(next.calculationItem)?.maxPrice > 0 && !byId.get(next.calculationItem).bundle ? next.calculationItem : 'diamond-ring';
   next.prices = {
