@@ -28,18 +28,19 @@ html { scroll-padding-top: 64px; }
 .selection-tools { margin: 0 0 10px; padding: 4px 8px; font-family: var(--sans); background: var(--surface); border-color: var(--border); border-radius: 6px; gap: 4px; }
 .selection-tools > span { font: 400 11px var(--sans); }
 .selection-tools button { min-height: 36px; font: 400 11px var(--sans); padding: 6px 10px; }
-.image-region { border: 0; border-radius: 0; margin: 0; }
+.image-region { display: flow-root; border: 0; border-radius: 0; margin: 0; }
 .generated-grid { width: var(--grid-width,100%); max-width: 100%; margin-inline: auto; }
 .trade-tile { border-radius: 0; }
 .trade-tile.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .selected .tile-select { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .tile-price, .tile-quantity, .image-caption, .image-watermark { min-height: 0; }
 .trade-tile .tile-price:focus, .trade-tile .tile-quantity:focus { outline-color: var(--accent); }
+.image-footer { align-items: baseline; margin-right: calc(6px - var(--image-padding,14px)); margin-bottom: calc(6px - var(--image-padding,14px)); }
 .image-totals { padding: 0; text-align: left; color: inherit; font-size: 14px; }
 .image-totals:focus-visible { outline-offset: 5px; }
 .image-totals img { width: 18px; height: 18px; }
 .image-totals small { font-size: 11px; }
-.image-watermark { font-family: var(--sans); }
+.image-watermark { font-family: var(--sans); width: max-content; max-width: 100%; margin-left: auto; padding: 0; flex-shrink: 0; }
 .stage-empty { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; padding: 24px; min-height: 230px; border: 1px dashed var(--border); border-radius: 4px; background: transparent; text-align: center; }
 .stage-empty::before { content: none; }
 .stage-empty .button { min-height: 42px; padding: 10px 18px; font-size: 12px; }
@@ -182,7 +183,7 @@ html { scroll-padding-top: 64px; }
   .image-totals { flex: 1 1 160px; font-size: 13px; }
   .image-totals img { width: 17px; height: 17px; }
   .image-totals small { font-size: 10px; }
-  .image-watermark { margin-left: auto; flex: 0 1 145px; width: 145px; max-width: 100%; min-height: 32px; font: 400 16px var(--sans); }
+  .image-watermark { font: 400 16px var(--sans); }
   .tile-remove { width: 24px; height: 24px; padding: 5px; left: 2px; bottom: 2px; }
   .tile-grip, .tile-select { width: 26px; height: 26px; padding: 5px; }
   .tile-remove svg { max-width: 12px; max-height: 12px; }

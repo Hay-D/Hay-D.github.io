@@ -76,7 +76,7 @@ export async function renderTradePage(rows, byId, settings, options, columns, pa
   const contacts = [ details.farm, details.tag, details.discord ].filter(Boolean).join(' · ');
   const contactHeight = contacts ? 34 : 0, notesHeight = details.notes ? 30 : 0;
   const rowsHeight = Math.ceil(subset.length / plan.columns) * (plan.cell + options.gap) - options.gap;
-  const footerHeight = 48;
+  const footerHeight = 48, footerInset = 6;
   const height = Math.max(100, options.padding * 2 + Math.max(0, rowsHeight) + captionHeight + contactHeight + footerHeight + notesHeight);
   const requested = options.quality;
   const scale = Math.min(requested, Math.sqrt(16e6 / (plan.width * height)), 16384 / Math.max(plan.width, height));
@@ -160,35 +160,40 @@ export async function renderTradePage(rows, byId, settings, options, columns, pa
   const summary = paymentSummary(rows, byId, settings.calculationItem);
   ctx.shadowBlur = 0;
   ctx.fillStyle = options.text;
-  ctx.font = `600 ${Math.max(12, Math.min(20, plan.width * .019))}px sans-serif`;
+  if (details.notes) {
+    ctx.font = '15px sans-serif';
+    ctx.fillText(fit(ctx, details.notes, plan.width - base * 2), base, bottom + 22);
+  }
+  const totalFont = `600 ${Math.max(12, Math.min(20, plan.width * .019))}px sans-serif`;
+  ctx.font = totalFont;
+  const totalDescent = options.totals ? Math.max(3, ctx.measureText('0123456789,.(items)').actualBoundingBoxDescent) : 0;
+  ctx.font = '500 15px sans-serif';
+  const footerY = height - footerInset - Math.max(totalDescent, ctx.measureText(PERMANENT_WATERMARK).actualBoundingBoxDescent);
+  ctx.font = totalFont;
   if (options.totals) {
     let x = base;
     const total = number(summary.coins);
-    ctx.fillText(total, x, bottom + 29);
+    ctx.fillText(total, x, footerY);
     x += ctx.measureText(total).width + 5;
     if (coin) {
-      ctx.drawImage(coin, x, bottom + 12, 19, 19);
+      ctx.drawImage(coin, x, footerY - 17, 19, 19);
       x += 25;
     }
     if (options.payment && summary.equivalent !== null) {
       const label = number(summary.equivalent), itemImage = await asset(summary.item.image);
-      ctx.fillText(label, x, bottom + 29);
+      ctx.fillText(label, x, footerY);
       x += ctx.measureText(label).width + 4;
       if (itemImage) {
-        ctx.drawImage(itemImage, x, bottom + 11, 21, 21);
+        ctx.drawImage(itemImage, x, footerY - 18, 21, 21);
         x += 26;
       }
     }
-    ctx.fillText(`(${number(summary.units)} items)`, x, bottom + 29);
+    ctx.fillText(`(${number(summary.units)} items)`, x, footerY);
   }
   ctx.textAlign = 'right';
   ctx.font = '500 15px sans-serif';
-  ctx.fillText(PERMANENT_WATERMARK, plan.width - base, bottom + 29);
+  ctx.fillText(PERMANENT_WATERMARK, plan.width - footerInset, footerY);
   ctx.textAlign = 'left';
-  if (details.notes) {
-    ctx.font = '15px sans-serif';
-    ctx.fillText(fit(ctx, details.notes, plan.width - base * 2), base, bottom + footerHeight + 22);
-  }
   return {
     canvas: canvas,
     plan: plan,
