@@ -69,15 +69,50 @@ export function exportPlan(count, options, screenColumns) {
 export async function renderTradePage(rows, byId, settings, options, columns, page = 0, details = {}) {
   const plan = exportPlan(rows.length, options, columns), subset = rows.slice(page * plan.perPage, (page + 1) * plan.perPage);
   const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
+  const sectionGap = 12, footerInset = 6, base = options.padding;
   const captionFont = Math.min(36, Math.max(22, plan.cell * .2)), captionLineHeight = captionFont * 1.3;
   ctx.font = `700 ${captionFont}px sans-serif`;
-  const captionLines = options.caption ? wrapCaption(ctx, imageCaption(options, details.partials), plan.width - options.padding * 2) : [];
-  const captionHeight = options.caption ? Math.max(32, plan.cell * .22, captionLines.length * captionLineHeight + 8) : 0;
-  const contacts = [ details.farm, details.tag, details.discord ].filter(Boolean).join(' · ');
-  const contactHeight = contacts ? 34 : 0, notesHeight = details.notes ? 30 : 0;
-  const rowsHeight = Math.ceil(subset.length / plan.columns) * (plan.cell + options.gap) - options.gap;
-  const footerHeight = 48, footerInset = 6;
-  const height = Math.max(100, options.padding * 2 + Math.max(0, rowsHeight) + captionHeight + contactHeight + footerHeight + notesHeight);
+  const captionLines = options.caption ? wrapCaption(ctx, imageCaption(options, details.partials), plan.width - base * 2) : [];
+  const captionBounds = captionLines.map((line, i) => {
+    const metrics = ctx.measureText(line);
+    return {top: i * captionLineHeight - metrics.actualBoundingBoxAscent, bottom: i * captionLineHeight + metrics.actualBoundingBoxDescent};
+  });
+  const captionTop = captionLines.length ? Math.min(...captionBounds.map(line => line.top)) : 0;
+  const captionHeight = captionLines.length ? Math.max(...captionBounds.map(line => line.bottom)) - captionTop : 0;
+  ctx.font = '500 17px sans-serif';
+  const contacts = fit(ctx, [ details.farm, details.tag, details.discord ].filter(Boolean).join(' · '), plan.width - base * 2);
+  const contactMetrics = ctx.measureText(contacts);
+  ctx.font = '15px sans-serif';
+  const notes = fit(ctx, details.notes || '', plan.width - base * 2), noteMetrics = ctx.measureText(notes);
+  const summary = paymentSummary(rows, byId, settings.calculationItem);
+  const totalFont = `600 ${Math.max(12, Math.min(20, plan.width * .019))}px sans-serif`;
+  ctx.font = totalFont;
+  const totalMetrics = ctx.measureText(`${number(summary.coins)} ${number(summary.equivalent ?? 0)} (${number(summary.units)} items)`);
+  ctx.font = '500 15px sans-serif';
+  const watermarkMetrics = ctx.measureText(PERMANENT_WATERMARK);
+  const footerAscent = Math.max(watermarkMetrics.actualBoundingBoxAscent, options.totals ? Math.max(18, totalMetrics.actualBoundingBoxAscent) : 0);
+  const footerDescent = Math.max(watermarkMetrics.actualBoundingBoxDescent, options.totals ? Math.max(3, totalMetrics.actualBoundingBoxDescent) : 0);
+  let cursor = base, contactY, captionY, noteY;
+  if (contacts) {
+    contactY = cursor + contactMetrics.actualBoundingBoxAscent;
+    cursor += contactMetrics.actualBoundingBoxAscent + contactMetrics.actualBoundingBoxDescent + sectionGap;
+  }
+  if (options.caption && options.captionPosition === 'top') {
+    captionY = cursor;
+    cursor += captionHeight + sectionGap;
+  }
+  const top = cursor, rowsHeight = Math.max(0, Math.ceil(subset.length / plan.columns) * (plan.cell + options.gap) - options.gap);
+  cursor += rowsHeight;
+  if (options.caption && options.captionPosition === 'bottom') {
+    captionY = cursor + sectionGap;
+    cursor = captionY + captionHeight;
+  }
+  if (notes) {
+    noteY = cursor + sectionGap + noteMetrics.actualBoundingBoxAscent;
+    cursor = noteY + noteMetrics.actualBoundingBoxDescent;
+  }
+  const footerY = cursor + sectionGap + footerAscent;
+  const height = Math.max(1, footerY + footerDescent + footerInset);
   const requested = options.quality;
   const scale = Math.min(requested, Math.sqrt(16e6 / (plan.width * height)), 16384 / Math.max(plan.width, height));
   canvas.width = Math.max(1, Math.floor(plan.width * scale));
@@ -85,13 +120,10 @@ export async function renderTradePage(rows, byId, settings, options, columns, pa
   ctx.scale(scale, scale);
   ctx.fillStyle = options.background;
   ctx.fillRect(0, 0, plan.width, height);
-  const base = options.padding;
-  let top = base;
   ctx.fillStyle = options.text;
   if (contacts) {
     ctx.font = '500 17px sans-serif';
-    ctx.fillText(fit(ctx, contacts, plan.width - base * 2), base, top + 21);
-    top += contactHeight;
+    ctx.fillText(contacts, base, contactY);
   }
   function drawCaption(y) {
     ctx.fillStyle = options.text;
@@ -99,17 +131,11 @@ export async function renderTradePage(rows, byId, settings, options, columns, pa
     ctx.textAlign = 'center';
     ctx.shadowColor = '#000b';
     ctx.shadowBlur = 5;
-    ctx.textBaseline = 'middle';
-    const inset = (captionHeight - captionLines.length * captionLineHeight) / 2;
-    captionLines.forEach((line, i) => ctx.fillText(line, plan.width / 2, y + inset + (i + .5) * captionLineHeight));
-    ctx.textBaseline = 'alphabetic';
+    captionLines.forEach((line, i) => ctx.fillText(line, plan.width / 2, y - captionTop + i * captionLineHeight));
     ctx.textAlign = 'left';
     ctx.shadowBlur = 0;
   }
-  if (options.caption && options.captionPosition === 'top') {
-    drawCaption(top);
-    top += captionHeight;
-  }
+  if (options.caption) drawCaption(captionY);
   const images = await Promise.all(subset.map((row => asset(byId.get(row.id).image))));
   const coin = await asset('assets/services/coin.png');
   for (let i = 0; i < subset.length; i++) {
@@ -152,23 +178,12 @@ export async function renderTradePage(rows, byId, settings, options, columns, pa
       if (nameWidth >= ctx.measureText('…').width) ctx.fillText(fit(ctx, item.name, nameWidth), x + plan.cell * .045, y + plan.cell * .955);
     }
   }
-  let bottom = top + Math.max(0, rowsHeight) + options.gap;
-  if (options.caption && options.captionPosition === 'bottom') {
-    drawCaption(bottom);
-    bottom += captionHeight;
-  }
-  const summary = paymentSummary(rows, byId, settings.calculationItem);
   ctx.shadowBlur = 0;
   ctx.fillStyle = options.text;
-  if (details.notes) {
+  if (notes) {
     ctx.font = '15px sans-serif';
-    ctx.fillText(fit(ctx, details.notes, plan.width - base * 2), base, bottom + 22);
+    ctx.fillText(notes, base, noteY);
   }
-  const totalFont = `600 ${Math.max(12, Math.min(20, plan.width * .019))}px sans-serif`;
-  ctx.font = totalFont;
-  const totalDescent = options.totals ? Math.max(3, ctx.measureText('0123456789,.(items)').actualBoundingBoxDescent) : 0;
-  ctx.font = '500 15px sans-serif';
-  const footerY = height - footerInset - Math.max(totalDescent, ctx.measureText(PERMANENT_WATERMARK).actualBoundingBoxDescent);
   ctx.font = totalFont;
   if (options.totals) {
     let x = base;

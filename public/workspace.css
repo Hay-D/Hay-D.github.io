@@ -28,7 +28,7 @@ html { scroll-padding-top: 64px; }
 .selection-tools { margin: 0 0 10px; padding: 4px 8px; font-family: var(--sans); background: var(--surface); border-color: var(--border); border-radius: 6px; gap: 4px; }
 .selection-tools > span { font: 400 11px var(--sans); }
 .selection-tools button { min-height: 36px; font: 400 11px var(--sans); padding: 6px 10px; }
-.image-region { display: flow-root; border: 0; border-radius: 0; margin: 0; }
+.image-region { display: flex; flex-direction: column; gap: 12px; border: 0; border-radius: 0; margin: 0; }
 .generated-grid { width: var(--grid-width,100%); max-width: 100%; margin-inline: auto; }
 .trade-tile { border-radius: 0; }
 .trade-tile.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
