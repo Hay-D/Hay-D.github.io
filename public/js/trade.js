@@ -1,6 +1,6 @@
 import './images.js';
 
-import { storage, number, escapeHTML as e, parseImport, parseQuantity, unitPrice, totals, serializeItems, copyText, downloadFile, resolveItem } from './core.js';
+import { storage, number, escapeHTML as e, parseImport, parseQuantity, unitPrice, serializeItems, copyText, downloadFile, resolveItem } from './core.js';
 
 import { icon } from './icons.js';
 
@@ -14,7 +14,9 @@ import { readPreferences, writePreferences, setGlobalLevel, onPreferencesChange 
 
 import { imageDefaults, editorDefaults, editorColumns, imageGrid, itemsAtLevel, serviceItems, materialSetItems, materialCounts, materialGroups, colorPresets, playerLevel, sortRows, selectedRows, paymentItems, priceLabel, paymentSummary, tradeOverview, listText, captionPartials, imageCaption, validateImage, restoreImageSettings, itemPrice, checkedPrice, readLegacyBackup } from './editor-core.js';
 
-import { renderTradePage, exportPlan, pngBlob } from './trade-renderer.js';
+import { renderTradePage, exportPlan, renderExchangePage, exchangePlan, pngBlob } from './trade-renderer.js';
+import {readDiscount, discountLines, checkExchanges, exchangeText, checkedLedger} from './trade-posts.js';
+import {createTradeDesk, exchangeCards, postCount} from './trade-desk.js';
 
 import { makeZip } from '../scanner/zip.js';
 
@@ -44,6 +46,8 @@ let draft = {
   items: [],
   name: 'My trade',
   mode: 'sell',
+  swaps: [],
+  discount: null,
   partials: true,
   notes: '',
   ...storage.get('draft', {})
@@ -67,6 +71,38 @@ let selectionEdits = new Map, selectionUndo = [], selectionRedo = [], savedStatu
 const displayRows = () => selectionRows(draft.items, selection, selectionEdits);
 
 const scope = () => selectedRows(displayRows(), selection);
+const isExchange = () => draft.mode === 'trade';
+const sellingDiscount = () => draft.mode === 'sell' ? draft.discount : null;
+
+function currentPost() {
+  const post = structuredClone(draft);
+  if (isExchange()) post.items = [];
+  else {
+    post.items = structuredClone(scope());
+    post.swaps = [];
+  }
+  return post;
+}
+
+function loadPost(post, message) {
+  if (scannerActive) closeScanner();
+  change(() => {
+    draft = structuredClone(post);
+    selection.clear();
+    selecting = false;
+  });
+  closeModal();
+  toast(message);
+}
+
+const desk = createTradeDesk({
+  modal, closeModal, toast, current: currentPost, checkPost: checkedDraft, loadPost,
+  catalog: () => catalog, byId: () => byId, farm: () => settings,
+  openFarm: () => settingsPanel('Farm', desk.profile),
+  openLists: () => savedLists(desk.profile), openImport: importItems, openGuide: showGuide,
+  saveExchanges: values => change(() => {draft.mode = 'trade'; draft.swaps = values;}),
+  readPostImage: async file => (await import('./post-image.js')).readPostImage(file)
+});
 
 function setSelection(next) {
   selection = next;
@@ -115,6 +151,8 @@ function modal(title, html, {wide: wide = false, back: back = false, prices = fa
   $('modal').classList.toggle('wide', wide);
   $('modal').classList.toggle('prices-dialog', prices);
   $('modal-back').hidden = !back;
+  $('modal-back').onclick = typeof back === 'function' ? back : () => settingsPanel();
+  $('modal-back').setAttribute('aria-label', typeof back === 'function' ? 'Back' : 'Back to settings');
   if (!$('modal').open) $('modal').showModal();
   $('modal').scrollTop = 0;
 }
@@ -124,8 +162,6 @@ function closeModal() {
 }
 
 $('close-modal').onclick = closeModal;
-
-$('modal-back').onclick = () => settingsPanel();
 
 $('modal').addEventListener('click', (event => {
   if (event.target !== $('modal')) return;
@@ -240,11 +276,13 @@ $('toast-undo').onclick = () => {
 
 function details() {
   return {
+    mode: draft.mode,
     partials: draft.partials,
     farm: settings.farm,
     tag: settings.tag,
     discord: settings.discord,
-    notes: draft.notes
+    notes: draft.notes,
+    discount: sellingDiscount()
   };
 }
 
@@ -260,8 +298,23 @@ function render(rebuild = true) {
     selectionRedo = [];
   }
   const image = draft.image, region = $('image-region');
-  region.hidden = !draft.items.length;
-  $('stage-empty').hidden = !!draft.items.length;
+  const exchange = isExchange(), count = exchange ? draft.swaps.length : draft.items.length;
+  region.hidden = !count;
+  $('stage-empty').hidden = !!count;
+  $('empty-add-label').textContent = exchange ? 'Add exchange' : 'Add items';
+  $('trade-grid').hidden = exchange;
+  $('exchange-grid').hidden = !exchange;
+  if (exchange && rebuild) $('exchange-grid').innerHTML = exchangeCards(draft.swaps, byId, image.names);
+  $('select-mode').hidden = exchange;
+  $('sort-menu').hidden = exchange;
+  $('open-discount').hidden = draft.mode !== 'sell';
+  $('discount-label').textContent = sellingDiscount() ? number(draft.discount.percent) + '% off' : 'Discount';
+  if (!scannerActive) {
+    const label = exchange ? 'Add exchange' : 'Add items';
+    $('open-add').setAttribute('aria-label', label);
+    $('open-add').title = label;
+    $('open-add').querySelector('span').textContent = label;
+  }
   columns = stageColumns();
   const grid = imageGrid(draft.items.length, image, region.clientWidth, columns);
   region.style.setProperty('--columns', grid.columns);
@@ -270,8 +323,8 @@ function render(rebuild = true) {
   for (const key of [ 'padding', 'gap' ]) region.style.setProperty('--image-' + key, image[key] + 'px');
   for (const key of [ 'background', 'border', 'text' ]) region.style.setProperty('--image-' + key, image[key]);
   $('current-list-name').textContent = draft.name || 'My trade';
-  $('board-count').textContent = draft.items.length;
-  $('header-level').textContent = settings.level ? 'Lv. ' + settings.level : 'Level';
+  $('board-count').textContent = count;
+  $('header-level').textContent = settings.farm || (settings.level ? 'Lv. ' + settings.level : 'Farm');
   $('sort-label').textContent = {
     quantity: 'Quantity',
     price: 'Price',
@@ -284,7 +337,7 @@ function render(rebuild = true) {
   document.body.classList.toggle('selecting', selecting);
   document.body.classList.toggle('has-selection', selection.size > 0);
   $('select-mode').setAttribute('aria-pressed', String(selecting));
-  $('selection-tools').hidden = !selecting && !selection.size;
+  $('selection-tools').hidden = exchange || (!selecting && !selection.size);
   $('selection-count').textContent = `${selection.size} selected`;
   $('save-selected').disabled = !commitSelectionPrices(draft.items, selection, selectionEdits).count;
   $('undo-button').disabled = !(selection.size ? selectionUndo.length : undoStack.length);
@@ -296,7 +349,7 @@ function render(rebuild = true) {
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', String(active));
   }));
-  if (rebuild) $('trade-grid').innerHTML = displayRows().map((row => {
+  if (rebuild && !exchange) $('trade-grid').innerHTML = displayRows().map((row => {
     const item = byId.get(row.id), label = priceLabel(row, image.simplify), name = image.names;
     return `<article class="trade-tile ${name ? 'has-name' : ''} ${item.bundle ? 'bundle-tile' : ''} ${selection.has(row.id) ? 'selected' : ''}" data-id="${row.id}" draggable="true" aria-label="${e(item.name)}"><img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" class="tile-image" src="${e(item.image)}" alt="${e(item.name)}" loading="lazy"><div class="tile-price-group" ${image.prices ? '' : 'hidden'}><input class="tile-price" value="${e(label)}" aria-label="${e(item.name)} price" spellcheck="false" style="--price-width:${Math.min(9, Math.max(2, label.length))}ch">${row.mode === 'coins' ? '<img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" class="tile-coin" src="assets/services/coin.png" alt="coins">' : ''}</div><div class="tile-footer">${name ? `<span class="tile-name" title="${e(item.name)}">${e(item.name)}</span>` : ''}<input class="tile-quantity" inputmode="numeric" value="${row.quantity}" aria-label="${e(item.name)} quantity" ${image.quantities ? '' : 'hidden'}></div><button class="tile-remove" data-remove="${row.id}" aria-label="Remove ${e(item.name)}">${icon('close')}</button><button class="tile-grip" data-grip="${row.id}" aria-label="Drag ${e(item.name)} to move or delete" title="Drag to move or delete">${icon('grip')}</button><button class="tile-select" data-select="${row.id}" aria-label="Select ${e(item.name)}" aria-pressed="${selection.has(row.id)}">${selection.has(row.id) ? icon('check') : icon('plus')}</button></article>`;
   })).join('');
@@ -337,11 +390,15 @@ function render(rebuild = true) {
   $('image-contact').textContent = contact;
   $('image-notes').hidden = !draft.notes;
   $('image-notes').textContent = draft.notes;
-  const summary = tradeOverview(scope(), byId, settings.calculationItem);
+  const summary = tradeOverview(exchange ? [] : scope(), byId, settings.calculationItem, sellingDiscount());
   updateTradeStatus(summary);
   $('image-footer').hidden = false;
-  $('image-totals').hidden = !image.totals;
-  $('image-totals').innerHTML = `${selection.size ? `<span class="scope-label">${selection.size} selected</span>` : ''}<strong>${number(summary.coins)}</strong><img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="assets/services/coin.png" alt="coins">${image.payment && summary.equivalent !== null ? `<strong>${number(summary.equivalent)}</strong><img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="${e(summary.item.image)}" alt="${e(summary.item.name)} equivalent">` : ''}<small>${number(summary.units)} items</small>`;
+  $('image-totals').hidden = exchange || !image.totals;
+  const discount = image.totals && !exchange ? summary.discount : null;
+  $('image-discount').hidden = !discount;
+  $('image-discount').innerHTML = discount ? `<dl><div><dt>Subtotal</dt><dd>${number(summary.subtotal)}</dd></div>
+    <div><dt>${e(discount.name)} <small>${number(discount.percent)}% off</small></dt><dd>−${number(summary.saved)}</dd></div></dl>` : '';
+  $('image-totals').innerHTML = `${selection.size ? `<span class="scope-label">${selection.size} selected</span>` : ''}${discount ? '<span class="discount-total-label">Total</span>' : ''}<strong>${number(summary.coins)}</strong><img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="assets/services/coin.png" alt="coins">${image.payment && summary.equivalent !== null ? `<strong>${number(summary.equivalent)}</strong><img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="${e(summary.item.image)}" alt="${e(summary.item.name)} equivalent">` : ''}<small>${number(summary.units)} items</small>`;
   $('image-totals').setAttribute('aria-label', `${number(summary.coins)} coins · ${number(summary.units)} items. Choose payment item.`);
   $('image-watermark').textContent = PERMANENT_WATERMARK;
   $('image-watermark').hidden = false;
@@ -748,6 +805,7 @@ onPreferencesChange((value => {
 }));
 
 function picker() {
+  if (isExchange()) return desk.editExchange();
   pickerHistory = storage.get('picker-usage', {});
   pickerOpenedAt = Date.now();
   pickerCategory = 'All';
@@ -818,9 +876,14 @@ $('open-add').onclick = () => {
 };
 
 $('empty-add').onclick = picker;
+$('exchange-grid').onclick = event => {
+  const exchange = event.target.closest('[data-exchange]');
+  if (exchange) desk.editExchange(Number(exchange.dataset.exchange));
+};
 
 function importItems(initial = '') {
-  modal('Import list', `<textarea id="import-input" class="export-text" aria-label="Item list" placeholder="20 Beeswax @ 3k\nOr paste a scanner code">${e(initial)}</textarea><label class="field-label">Items<select id="import-mode"><option value="replace">Replace this list</option><option value="merge">Add to this list</option></select></label><p class="editor-error" id="import-error"></p><div class="dialog-actions"><button class="button primary" id="confirm-import">Import</button></div>`);
+  modal('Import list', `<textarea id="import-input" class="export-text" aria-label="Item list" placeholder="20 Beeswax @ 3k\nOr paste a scanner code">${e(initial)}</textarea><label class="field-label">Items<select id="import-mode"><option value="replace">Replace this list</option><option value="merge">Add to this list</option></select></label><p class="editor-error" id="import-error"></p><div class="dialog-actions"><button class="text-button" id="open-old-post">Import an old post</button><button class="button primary" id="confirm-import">Import</button></div>`);
+  $('open-old-post').onclick = () => desk.oldPost($('import-input').value);
   $('confirm-import').onclick = () => {
     try {
       const rows = parseImport($('import-input').value, catalog).map(pricedRow);
@@ -840,6 +903,7 @@ function importItems(initial = '') {
       }
       change((() => {
         draft.items = next;
+        if (isExchange()) draft.mode = 'sell';
         selection.clear();
         selecting = false;
       }));
@@ -853,11 +917,10 @@ function importItems(initial = '') {
 
 $('open-import').onclick = () => importItems();
 
-function settingsPanel(section = 'Home') {
+function settingsPanel(section = 'Home', back = true) {
   if (section === 'Home') {
     const menus = [ [ 'Image', 'image', 'Image', 'Layout, colors & caption' ], [ 'Farm', 'star', 'Your farm', 'Level & contact' ], [ 'Defaults', 'sort', 'Prices & sorting', 'Defaults & item order' ], [ 'Payment', 'tag', 'Payment item', byId.get(settings.calculationItem)?.name || 'Diamond ring' ], [ 'Text', 'list', 'Text format', 'How your list is copied' ], [ 'Data', 'bookmark', 'Lists & backup', 'Save, restore & export' ], [ 'About', 'shield', 'About', 'Changelog, privacy & terms' ] ];
-    modal('Settings', `<label class="settings-row global-level-row"><span>Farm level<small>Applies everywhere</small></span><input id="global-level" data-global-level type="number" min="1" max="999" value="${settings.level ?? ''}" placeholder="All" aria-label="Global farm level"></label><div class="settings-menu">${menus.map((([key, ico, name, detail]) => `<button data-section="${key}"><span class="menu-icon">${icon(ico)}</span><span><strong>${name}</strong><small>${e(detail)}</small></span>${icon('chevron-right')}</button>`)).join('')}</div>`);
-    bindLevel($('global-level'));
+    modal('Settings', `<div class="settings-menu">${menus.map((([key, ico, name, detail]) => `<button data-section="${key}"><span class="menu-icon">${icon(ico)}</span><span><strong>${name}</strong><small>${e(detail)}</small></span>${icon('chevron-right')}</button>`)).join('')}</div>`);
     $('modal-content').onclick = event => {
       const button = event.target.closest('[data-section]');
       if (button) settingsPanel(button.dataset.section);
@@ -876,9 +939,7 @@ function settingsPanel(section = 'Home') {
     Data: 'Lists & backup',
     About: 'About'
   };
-  modal(titles[section], '<div class="settings-section" id="settings-section"></div><div class="dialog-actions"><button class="button primary" id="settings-done">Done</button></div>', {
-    back: true
-  });
+  modal(titles[section], '<div class="settings-section" id="settings-section"></div><div class="dialog-actions"><button class="button primary" id="settings-done">Done</button></div>', {back});
   $('settings-done').onclick = closeModal;
   const host = $('settings-section'), image = draft.image;
   if (section === 'About') host.innerHTML = aboutContent();
@@ -1003,22 +1064,23 @@ function settingsPanel(section = 'Home') {
   if (section === 'Data') {
     host.innerHTML = `<div class="settings-menu"><button id="data-save"><span class="menu-icon">${icon('bookmark')}</span><span><strong>Save this list</strong><small>Keep it for another trade</small></span>${icon('chevron-right')}</button><button id="data-lists"><span class="menu-icon">${icon('list')}</span><span><strong>Saved lists</strong><small>Load a previous trade</small></span>${icon('chevron-right')}</button></div><h3>Backup</h3><div class="settings-top-actions"><button class="button secondary" id="backup-all">Download backup</button><button class="button secondary" id="restore-button">Restore<input id="restore-all" type="file" accept=".json" hidden></button></div><p class="editor-error" id="backup-error"></p><details class="advanced"><summary>More data options</summary><div class="settings-top-actions"><button class="button quiet" id="export-code">Export item code</button><button class="button quiet danger-text" id="clear-all">Clear this list</button></div></details>`;
     $('data-save').onclick = saveNamed;
-    $('data-lists').onclick = savedLists;
+    $('data-lists').onclick = () => savedLists();
     $('backup-all').onclick = () => downloadFile('hayday-backup.json', JSON.stringify({
       type: 'hayday-editor-backup',
       version: 1,
       draft: draft,
       settings: settings,
-      lists: storage.get('lists', [])
+      lists: storage.get('lists', []),
+      ledger: storage.get('trade-ledger', [])
     }, null, 2));
     $('restore-button').onclick = event => {
       if (event.target !== $('restore-all')) $('restore-all').click();
     };
     $('restore-all').onchange = restoreBackup;
-    $('export-code').onclick = () => downloadFile('hayday-items.json', JSON.stringify({
-      version: 1,
-      items: draft.items
-    }, null, 2));
+    $('export-code').onclick = () => {
+      if (isExchange()) desk.downloadPost(currentPost());
+      else downloadFile('hayday-items.json', JSON.stringify({version: 1, items: draft.items}, null, 2));
+    };
     $('clear-all').onclick = clearAll;
   }
 }
@@ -1031,7 +1093,28 @@ $('open-layout').onclick = () => settingsPanel('Image');
 
 $('open-farm').onclick = () => {
   if (scannerActive) closeScanner();
-  settingsPanel('Farm');
+  desk.profile();
+};
+
+$('open-discount').onclick = () => {
+  const discount = sellingDiscount();
+  modal('Selling discount', `
+    <label class="field-label">Name<input id="discount-name" maxlength="50" value="${e(discount?.name || '')}" placeholder="Bundle deal"></label>
+    <label class="field-label">Discount (%)<input id="discount-percent" type="number" inputmode="decimal" min="0" max="100" step=".01" value="${discount?.percent ?? ''}" placeholder="0"></label>
+    <p class="editor-error" id="discount-error" role="alert"></p>
+    <div class="dialog-actions">${discount ? '<button class="button quiet" id="remove-discount">Remove discount</button>' : ''}<button class="button primary" id="save-discount">Apply</button></div>`);
+  const set = value => {
+    change(() => {draft.discount = value;});
+    closeModal();
+  };
+  $('save-discount').onclick = () => {
+    try {
+      set(readDiscount({percent: $('discount-percent').value, name: $('discount-name').value}));
+    } catch (error) {
+      $('discount-error').textContent = error.message;
+    }
+  };
+  if (discount) $('remove-discount').onclick = () => set(null);
 };
 
 $('sort-menu').onclick = () => settingsPanel('Defaults');
@@ -1128,7 +1211,7 @@ function priceBook() {
     }
   };
   $('save-current-prices').onclick = () => {
-    selectedRows(draft.items, selection).forEach((row => {
+    (isExchange() ? [] : selectedRows(draft.items, selection)).forEach((row => {
       if (row.price !== undefined && !row.unpriced) settings.prices[row.id] = row.priceInput || priceLabel(row);
     }));
     save();
@@ -1144,13 +1227,14 @@ $('open-prices').onclick = () => {
 };
 
 function paymentPicker(back = false) {
-  const summary = paymentSummary(scope(), byId, settings.calculationItem);
+  const rows = isExchange() ? [] : scope();
+  const summary = paymentSummary(rows, byId, settings.calculationItem, sellingDiscount());
   modal(back ? 'Payment item' : 'Prices', `${back ? '' : priceTabs('payment')}<div class="price-panel"><div class="calc-summary" id="calc-summary"></div><div class="calc-controls"><div class="search-wrap">${icon('search')}<input id="payment-search" type="search" placeholder="Find an item" aria-label="Find payment item"></div><select id="payment-sort" aria-label="Sort payment items"><option value="high">Highest price</option><option value="low">Lowest price</option><option value="level">Highest at my level</option><option value="name">Name</option></select></div><label class="payment-level" id="payment-level-field">My level<input id="payment-level" data-global-level type="number" min="1" max="999" value="${settings.level ?? ''}" placeholder="All" aria-label="Payment filter level"></label><div class="payment-grid" id="payment-grid"></div></div><div class="dialog-actions"><p class="helper" id="payment-scope">${selection.size ? selection.size + ' selected items' : number(summary.units) + ' items'} · ${number(summary.coins)} coins</p><button class="button primary" id="payment-done">Done</button></div>`, {
     back: back,
     prices: true
   });
   const renderPayment = () => {
-    const total = paymentSummary(scope(), byId, settings.calculationItem);
+    const total = paymentSummary(rows, byId, settings.calculationItem, sellingDiscount());
     $('calc-summary').innerHTML = `<img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="${e(total.item.image)}" alt=""><div><strong>${number(total.equivalent)}</strong><small>${e(total.item.name)} · ${number(total.item.maxPrice)} coins each</small></div>`;
     const items = paymentItems(catalog, $('payment-search').value, $('payment-sort').value, settings.level);
     $('payment-grid').innerHTML = items.slice(0, 120).map((item => `<button class="payment-item ${item.id === settings.calculationItem ? 'active' : ''}" data-payment="${item.id}" aria-label="Use ${e(item.name)}" aria-pressed="${item.id === settings.calculationItem}"><img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="${e(item.image)}" alt="" loading="lazy"><strong>${e(item.name)}</strong><small>${number(item.maxPrice)}</small><span class="item-level">Lv. ${item.level}</span></button>`)).join('') || '<p class="empty-note">No items at this level.</p>';
@@ -1266,9 +1350,9 @@ function saveNamed() {
   };
 }
 
-function savedLists() {
+function savedLists(back = false) {
   const lists = storage.get('lists', []);
-  modal('Your lists', `<div class="settings-top-actions"><button class="button secondary" id="save-current-list">Save current</button><button class="button quiet" id="new-list">New list</button></div>${lists.map((list => `<div class="saved-row"><div><strong>${e(list.name)}</strong><p>${list.draft.items.length} items · ${e(new Date(list.date).toLocaleDateString())}</p></div><button class="button secondary" data-load="${e(list.id)}">Open</button><button class="icon-button danger-text" data-delete="${e(list.id)}" aria-label="Delete ${e(list.name)}">${icon('trash')}</button></div>`)).join('') || '<p class="empty-note">Your saved lists appear here.</p>'}`);
+  modal('Your lists', `<div class="settings-top-actions"><button class="button secondary" id="save-current-list">Save current</button><button class="button quiet" id="new-list">New list</button></div>${lists.map((list => `<div class="saved-row"><div><strong>${e(list.name)}</strong><p>${postCount(list.draft)} · ${e(new Date(list.date).toLocaleDateString())}</p></div><button class="button secondary" data-load="${e(list.id)}">Open</button><button class="icon-button danger-text" data-delete="${e(list.id)}" aria-label="Delete ${e(list.name)}">${icon('trash')}</button></div>`)).join('') || '<p class="empty-note">Your saved lists appear here.</p>'}`, {back});
   $('save-current-list').onclick = saveNamed;
   $('new-list').onclick = () => {
     change((() => {
@@ -1276,6 +1360,8 @@ function savedLists() {
         ...draft,
         name: 'My trade',
         items: [],
+        swaps: [],
+        discount: null,
         notes: ''
       };
       selection.clear();
@@ -1300,7 +1386,7 @@ function savedLists() {
     }
     if (removeButton) {
       storage.set('lists', lists.filter((list => list.id !== removeButton.dataset.delete)));
-      savedLists();
+      savedLists(back);
     }
   };
 }
@@ -1311,9 +1397,10 @@ $('open-saved').onclick = () => {
 };
 
 function clearAll() {
-  if (!draft.items.length) return;
+  if (!(isExchange() ? draft.swaps.length : draft.items.length)) return;
   change((() => {
-    draft.items = [];
+    if (isExchange()) draft.swaps = [];
+    else draft.items = [];
     selection.clear();
     selecting = false;
   }));
@@ -1326,6 +1413,7 @@ function separator() {
 }
 
 function plainText(rows = scope()) {
+  if (isExchange()) return exchangeText(draft.swaps, byId);
   return listText(rows, byId, settings.textFormat, separator());
 }
 
@@ -1346,9 +1434,9 @@ function paymentText(summary) {
 }
 
 function textExport() {
-  const rows = scope();
-  if (!rows.length) return toast('Add items first');
-  modal('Share text', `<div class="tabs"><button class="active" id="plain-text-tab">List</button><button id="discord-text-tab">Discord</button><button id="import-text-tab">Item code</button></div><textarea id="text-output" class="export-text" aria-label="Text to share"></textarea><div class="dialog-actions"><span class="helper">${selection.size ? selection.size + ' selected' : 'All items'} · edit before copying</span><button class="button quiet" id="text-download">Download</button><button class="button primary" id="text-copy">Copy text</button></div>`);
+  const rows = scope(), exchange = isExchange();
+  if (!(exchange ? draft.swaps.length : rows.length)) return toast(exchange ? 'Add an exchange first' : 'Add items first');
+  modal('Share text', `<div class="tabs"><button class="active" id="plain-text-tab">List</button><button id="discord-text-tab">Discord</button><button id="import-text-tab">${exchange ? 'Post file' : 'Item code'}</button></div><textarea id="text-output" class="export-text" aria-label="Text to share"></textarea><div class="dialog-actions"><span class="helper">${selection.size ? selection.size + ' selected' : 'All items'} · edit before copying</span><button class="button quiet" id="text-download">Download</button><button class="button primary" id="text-copy">Copy text</button></div>`);
   const show = (id, text) => {
     document.querySelectorAll('.tabs button').forEach((button => button.classList.toggle('active', button.id === id)));
     $('text-output').value = text;
@@ -1357,11 +1445,18 @@ function textExport() {
   show('plain-text-tab', plainText(rows));
   $('plain-text-tab').onclick = () => show('plain-text-tab', plainText(rows));
   $('discord-text-tab').onclick = () => {
-    const total = paymentSummary(rows, byId, settings.calculationItem);
-    const summary = [ `${number(total.coins)} coins`, `${number(total.units)} items`, paymentText(total) ].filter(Boolean).join(' · ');
-    show('discord-text-tab', [ `**${draft.mode === 'buy' ? 'BUYING' : 'SELLING'}${settings.farm ? ' · ' + settings.farm : ''}**`, plainText(rows), `**${summary}**`, imageCaption(draft.image, draft.partials), settings.tag, settings.discord, draft.notes ].filter(Boolean).join('\n'));
+    const total = paymentSummary(exchange ? [] : rows, byId, settings.calculationItem, sellingDiscount());
+    const summary = [`${number(total.coins)} coins`, `${number(total.units)} items`, paymentText(total)].filter(Boolean).join(' · ');
+    const heading = exchange ? 'TRADING' : draft.mode === 'buy' ? 'BUYING' : 'SELLING';
+    const post = exchange ? exchangeText(draft.swaps, byId, true) : plainText(rows);
+    const prices = exchange ? [] : [...discountLines(total), `**${total.discount ? 'Total · ' : ''}${summary}**`];
+    show('discord-text-tab', [
+      `**${heading}${settings.farm ? ' · ' + settings.farm : ''}**`, post, ...prices,
+      imageCaption(draft.image, draft.partials), settings.tag, settings.discord, draft.notes
+    ].filter(Boolean).join('\n'));
   };
-  $('import-text-tab').onclick = () => show('import-text-tab', serializeItems(rows));
+  $('import-text-tab').onclick = () => show('import-text-tab', exchange ?
+    JSON.stringify({type: 'haydex-post', version: 1, post: currentPost()}, null, 2) : serializeItems(rows));
   $('text-copy').onclick = async () => {
     try {
       await copyText($('text-output').value);
@@ -1370,7 +1465,10 @@ function textExport() {
       toast(error.message);
     }
   };
-  $('text-download').onclick = () => downloadFile('haydex-trade.txt', $('text-output').value, 'text/plain');
+  $('text-download').onclick = () => {
+    if (exchange && $('import-text-tab').classList.contains('active')) desk.downloadPost(currentPost());
+    else downloadFile('haydex-trade.txt', $('text-output').value, 'text/plain');
+  };
 }
 
 $('copy-text').onclick = () => {
@@ -1378,9 +1476,14 @@ $('copy-text').onclick = () => {
 };
 
 async function preview() {
-  if (!draft.items.length) return toast('Add items first');
-  const selected = structuredClone(scope()), all = structuredClone(displayRows()), hasSelection = selection.size > 0;
-  modal('Share image', `<div class="preview-controls"><select id="export-scope" aria-label="Items to export">${hasSelection ? `<option value="selected">${selection.size} selected ${selection.size === 1 ? 'item' : 'items'}</option>` : ''}<option value="all">All items</option></select><select id="export-page" aria-label="Image page"></select><button class="text-button" id="export-options">Appearance</button></div><div id="export-preview"><p class="helper">Creating image…</p></div><p id="export-info" class="preview-info"></p><p class="editor-error" id="export-error"></p><div class="dialog-actions preview-actions"><button class="button quiet" id="image-copy" disabled>Copy image</button><button class="button secondary" id="images-zip" hidden>All pages</button><button class="button primary" id="image-download" disabled>Download PNG</button></div>`);
+  const exchange = isExchange();
+  if (!(exchange ? draft.swaps.length : draft.items.length)) return toast(exchange ? 'Add an exchange first' : 'Add items first');
+  const selected = structuredClone(scope()), all = structuredClone(exchange ? draft.swaps : displayRows());
+  const hasSelection = !exchange && selection.size > 0;
+  const planFor = (rows, col) => exchange ? exchangePlan(rows, draft.image) : exportPlan(rows.length, draft.image, col);
+  const renderPage = (rows, col, page) => exchange ? renderExchangePage(rows, byId, draft.image, page, details()) :
+    renderTradePage(rows, byId, settings, draft.image, col, page, details());
+  modal('Share image', `<div class="preview-controls"><select id="export-scope" aria-label="Items to export" ${exchange ? 'hidden' : ''}>${hasSelection ? `<option value="selected">${selection.size} selected ${selection.size === 1 ? 'item' : 'items'}</option>` : ''}<option value="all">All items</option></select><select id="export-page" aria-label="Image page"></select><button class="text-button" id="export-options">Appearance</button></div><div id="export-preview"><p class="helper">Creating image…</p></div><p id="export-info" class="preview-info"></p><p class="editor-error" id="export-error"></p><div class="dialog-actions preview-actions"><button class="button quiet" id="image-copy" disabled>Copy image</button><button class="button secondary" id="images-zip" hidden>All pages</button><button class="button primary" id="image-download" disabled>Download PNG</button></div>`);
   const host = $('export-preview');
   let output = null, generation = 0;
   const rows = () => $('export-scope').value === 'selected' ? selected : all;
@@ -1392,21 +1495,21 @@ async function preview() {
     $('image-download').disabled = true;
     $('images-zip').disabled = true;
     try {
-      const currentRows = rows(), col = columnCount(), plan = exportPlan(currentRows.length, draft.image, col);
+      const currentRows = rows(), col = columnCount(), plan = planFor(currentRows, col);
       $('export-error').textContent = '';
       if (reset) $('export-page').innerHTML = Array.from({
         length: plan.pages
       }, ((_, i) => `<option value="${i}">Page ${i + 1} / ${plan.pages}</option>`)).join('');
       $('export-page').hidden = plan.pages < 2;
       $('images-zip').hidden = plan.pages < 2;
-      const next = await renderTradePage(currentRows, byId, settings, draft.image, col, Number($('export-page').value), details());
+      const next = await renderPage(currentRows, col, Number($('export-page').value));
       if (current !== generation || !host.isConnected || !$('modal').open) return;
       output = next;
       next.canvas.className = 'preview-canvas';
       next.canvas.setAttribute('role', 'img');
       next.canvas.setAttribute('aria-label', 'Trade image');
       host.replaceChildren(next.canvas);
-      $('export-info').textContent = `${next.canvas.width} × ${next.canvas.height} · ${currentRows.length} ${currentRows.length === 1 ? 'item' : 'items'}`;
+      $('export-info').textContent = `${next.canvas.width} × ${next.canvas.height} · ${currentRows.length} ${exchange ? (currentRows.length === 1 ? 'exchange' : 'exchanges') : (currentRows.length === 1 ? 'item' : 'items')}`;
       if (next.scale < next.requested - .01) $('export-info').textContent += ' · device-safe resolution';
       $('image-copy').disabled = false;
       $('image-download').disabled = false;
@@ -1423,30 +1526,30 @@ async function preview() {
     try {
       if (!navigator.clipboard?.write || !window.ClipboardItem) throw new Error('Clipboard unavailable');
       await navigator.clipboard.write([ new ClipboardItem({
-        'image/png': pngBlob(output.canvas)
+        'image/png': pngBlob(output.canvas, output.post)
       }) ]);
       toast('Image copied');
     } catch {
       if (output) {
-        downloadFile('haydex-trade.png', await pngBlob(output.canvas), 'image/png');
+        downloadFile('haydex-trade.png', await pngBlob(output.canvas, output.post), 'image/png');
         toast('PNG downloaded');
       }
     }
   };
   $('image-download').onclick = async () => {
-    if (output) downloadFile(`haydex-trade-${Number($('export-page').value) + 1}.png`, await pngBlob(output.canvas), 'image/png');
+    if (output) downloadFile(`haydex-trade-${Number($('export-page').value) + 1}.png`, await pngBlob(output.canvas, output.post), 'image/png');
   };
   $('images-zip').onclick = async () => {
     const button = $('images-zip');
     button.disabled = true;
     try {
-      const files = [], currentRows = rows(), col = columnCount(), plan = exportPlan(currentRows.length, draft.image, col);
+      const files = [], currentRows = rows(), col = columnCount(), plan = planFor(currentRows, col);
       for (let page = 0; page < plan.pages; page++) {
         button.textContent = `${page + 1} / ${plan.pages}`;
-        const result = await renderTradePage(currentRows, byId, settings, draft.image, col, page, details());
+        const result = await renderPage(currentRows, col, page);
         files.push({
           name: `trade-${page + 1}.png`,
-          data: await pngBlob(result.canvas)
+          data: await pngBlob(result.canvas, result.post)
         });
         result.canvas.width = 1;
         result.canvas.height = 1;
@@ -1469,9 +1572,29 @@ $('preview-card').onclick = () => {
   preview();
 };
 
-for (const button of document.querySelectorAll('[data-mode]')) button.onclick = () => change((() => draft.mode = button.dataset.mode));
+for (const button of document.querySelectorAll('[data-mode]')) button.onclick = () => {
+  if (draft.mode === button.dataset.mode) return;
+  const next = button.dataset.mode;
+  change(() => {
+    if (isExchange() || next === 'trade') {
+      selection.clear();
+      selecting = false;
+    }
+    draft.mode = next;
+  });
+};
 
-$('open-guide').onclick = () => modal('Quick guide', `<ol class="help-steps"><li><strong>1. Add or scan</strong><p>Find items with Add items, or read photos of your barn in Scanner.</p></li><li><strong>2. Set your trade</strong><p>Tap any quantity or price to edit. Drag the grip to move or delete. Select items to edit price or quantity temporarily. Deselect to restore the originals. Save keeps selected price changes.</p></li><li><strong>3. Share</strong><p>Image creates your ad. Text copies your list. Tap the caption on the image to edit it.</p></li></ol><details class="advanced"><summary>Price formats</summary><p class="helper">3k = 3,000 coins each. 5x = five times shop max. Expressions like 20*4 work. Ratios such as 4:1 are excluded from coin totals.</p></details>`);
+function showGuide() {
+  modal('Quick guide', `
+    <ol class="help-steps">
+      <li><strong>Build a post</strong><p>Choose Sell, Buy or Trade. Add items, or scan a barn or silo recording.</p></li>
+      <li><strong>Set your terms</strong><p>Tap a tile to edit a price or quantity. For item swaps, add both Have and Want.</p></li>
+      <li><strong>Share and track</strong><p>Copy an image or Discord text. Open the farm menu to save deals and see History and Stats.</p></li>
+    </ol>
+    <div class="dialog-actions"><a class="button primary" href="${desk.guideURL}" target="_blank" rel="noopener">Open PDF guide</a></div>`, {back: desk.profile});
+}
+
+$('open-guide').onclick = showGuide;
 
 function checkedSettings(value = {}) {
   const next = {
@@ -1513,7 +1636,9 @@ function checkedDraft(value) {
   }), catalog) : [];
   return {
     name: String(value.name || 'My trade').slice(0, 50),
-    mode: value.mode === 'buy' ? 'buy' : 'sell',
+    mode: ['sell', 'buy', 'trade'].includes(value.mode) ? value.mode : 'sell',
+    swaps: checkExchanges(value.swaps, catalog),
+    discount: value.discount ? readDiscount(value.discount) : null,
     partials: value.partials !== false,
     notes: String(value.notes || '').slice(0, 200),
     image: restoreImageSettings(value.image || {
@@ -1538,7 +1663,7 @@ async function restoreBackup(event) {
     const file = event.target.files[0];
     if (!file || file.size > 2e6) throw new Error('Choose a backup under 2 MB');
     const text = await file.text(), legacy = readLegacyBackup(text, catalog);
-    let restored, nextSettings, lists;
+    let restored, nextSettings, lists, ledger;
     if (legacy) {
       restored = checkedDraft(legacy.active.draft);
       nextSettings = checkedSettings({
@@ -1554,12 +1679,14 @@ async function restoreBackup(event) {
       if (data.version !== 1 || data.type !== 'hayday-editor-backup') throw new Error('Choose a builder backup or an original-site export');
       nextSettings = checkedSettings(data.settings);
       restored = checkedDraft(data.draft);
+      if (data.ledger !== undefined) ledger = checkedLedger(data.ledger, checkedDraft);
       lists = Array.isArray(data.lists) ? data.lists.slice(0, 50).map((list => ({
         ...list,
         name: String(list.name || 'Saved list').slice(0, 50),
         draft: checkedDraft(list.draft)
       }))) : [];
     }
+    if (ledger && !storage.set('trade-ledger', ledger)) throw new Error('Could not restore deals: device storage is full.');
     remember();
     draft = restored;
     settings = nextSettings;
@@ -1644,7 +1771,7 @@ async function init() {
       if (action === 'image') preview();
       if (action === 'settings') settingsPanel();
       if (action === 'lists') savedLists();
-      if (action === 'farm') settingsPanel('Farm');
+      if (action === 'farm') desk.profile();
     }
   } catch (error) {
     toast(error.message);
@@ -1722,7 +1849,7 @@ window.addEventListener('message', (event => {
   if (event.data?.type === 'hayday-action') {
     closeScanner();
     const action = event.data.action;
-    if (action === 'prices') priceBook(); else if (action === 'image') preview(); else if (action === 'lists') savedLists(); else if (action === 'farm') settingsPanel('Farm');
+    if (action === 'prices') priceBook(); else if (action === 'image') preview(); else if (action === 'lists') savedLists(); else if (action === 'farm') desk.profile();
   }
 }));
 

@@ -20,6 +20,13 @@ if (references.version !== 1 || references.tile !== 64 || references.columns !==
 const art = await readFile(resolve(source, 'scanner/references/items.webp'));
 const digits = await readFile(resolve(source, 'scanner/references/digits.png'));
 if (art.byteLength > 2e6 || art.toString('ascii', 8, 12) !== 'WEBP' || digits.byteLength > 1e5 || digits.toString('ascii', 1, 4) !== 'PNG') throw new Error('Scanner reference images are invalid');
+const engine = await readFile(resolve(source, 'scanner/recognizer.wasm'));
+const engineExports = WebAssembly.Module.exports(await WebAssembly.compile(engine));
+if (engine.byteLength > 250000 || !['input_ptr', 'load_references', 'extract_inventory', 'recognize'].every(name => engineExports.some(entry => entry.name === name))) {
+  throw new Error('Invalid Rust scanner binary. Run npm run build:scanner.');
+}
+const guide = await readFile(resolve(source, 'HayDex-Guide.pdf'));
+if (guide.toString('ascii', 0, 5) !== '%PDF-') throw new Error('HayDex guide PDF is missing or invalid.');
 validateMarket(JSON.parse(await readFile(resolve(source, 'data/market-prices.json'), 'utf8')));
 await rm(dist, {recursive: true, force: true});
 await mkdir(dist, {recursive: true});

@@ -1,9 +1,9 @@
 const imageCache = 'haydex-images-v1';
-const appCache = 'haydex-app-1.1.0';
+const appCache = 'haydex-app-1.2.0-r3';
 const appFiles = [
-  './', 'index.html', 'app.css', 'editor.css', 'workspace.css',
-  'js/core.js', 'js/trade.js', 'js/icons.js', 'js/editor-core.js', 'js/trade-renderer.js', 'js/preferences.js', 'js/selection-draft.js', 'js/branding.js', 'js/about.js', 'js/analytics.js', 'js/images.js', 'js/picker-usage.js', 'js/market-prices.js',
-  'scanner/', 'scanner/index.html', 'scanner/scanner.js', 'scanner/scanner.css', 'scanner/review.css', 'scanner/embed.js', 'scanner/review.js', 'scanner/layout.js', 'scanner/inventory.js', 'scanner/canvas.js', 'scanner/zip.js', 'scanner/preprocess.js', 'scanner/recognition.js', 'scanner/recognition-core.js', 'scanner/recognition-worker.js', 'scanner/references/index.json', 'scanner/references/items.webp', 'scanner/references/digits.png',
+  './', 'index.html', 'app.css', 'editor.css', 'workspace.css', 'desk.css', 'HayDex-Guide.pdf',
+  'js/core.js', 'js/trade.js', 'js/icons.js', 'js/editor-core.js', 'js/trade-renderer.js', 'js/preferences.js', 'js/selection-draft.js', 'js/branding.js', 'js/about.js', 'js/analytics.js', 'js/images.js', 'js/picker-usage.js', 'js/market-prices.js', 'js/trade-desk.js', 'js/trade-posts.js', 'js/post-image.js', 'js/post-image-data.js', 'js/post-artwork.js',
+  'scanner/', 'scanner/index.html', 'scanner/scanner.js', 'scanner/scanner.css', 'scanner/review.css', 'scanner/embed.js', 'scanner/review.js', 'scanner/layout.js', 'scanner/inventory.js', 'scanner/canvas.js', 'scanner/zip.js', 'scanner/preprocess.js', 'scanner/recognition.js', 'scanner/recognition-core.js', 'scanner/recognition-worker.js', 'scanner/recognition-wasm.js', 'scanner/recognizer.wasm', 'scanner/video.js', 'scanner/references/index.json', 'scanner/references/items.webp', 'scanner/references/digits.png',
   'data/catalog.json', 'data/market-prices.json', 'assets/haydaylogo.svg', 'assets/favicon.svg', 'assets/icons.svg', 'assets/services/coin.png', 'assets/services/help.png', 'assets/fonts/dm-sans.woff2', 'assets/fonts/dm-serif-display.woff2',
   ...['bem', 'sem', 'lem'].map(group => `assets/sets/${group}-set.png`),
   ...['chicken-feed', 'cow-feed', 'pig-feed', 'sheep-feed', 'lamb-feed', 'goat-feed', 'wheat-bundle', 'meat-bucket'].map(id => `assets/feeds/${id}.png`)

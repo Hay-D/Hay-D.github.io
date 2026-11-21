@@ -12,9 +12,10 @@ import { checkedPrice, priceLabel, playerLevel, itemsAtLevel } from '../js/edito
 
 import { detectLayout } from './layout.js';
 
-import { scannerCells } from './preprocess.js';
+import { retryVideoCrop, scannerCells } from './preprocess.js';
 
 import { startScanner, scannerArtwork } from './recognition.js';
+import {loadVideo, releaseVideo, videoFrames, scanObservations, matchMargin, MAX_VIDEO_SIZE, MAX_VIDEO_SECONDS} from './video.js';
 
 import { makeZip } from './zip.js';
 
@@ -28,9 +29,9 @@ if (embedded) document.body.classList.add('embedded');
 
 let excluded = new Set, refreshLevelView = null;
 
-let catalog = [], byId = new Map, uploads = [], results = [], scanner = null;
+let catalog = [], byId = new Map, uploads = [], results = [], scanAbort;
 
-let scanning = false, loadingPhotos = false, startingScanner = false, cancelled = false, toastTimer, reviewing = false;
+let scanning = false, loadingFiles = false, toastTimer, reviewing = false;
 
 let options = {
   skipZero: true,
@@ -91,12 +92,10 @@ $('review-step').onclick = () => viewReview(true);
 $('scanner-tab').onclick = () => viewReview(results.length > 0);
 
 function updateButtons() {
-  const ready = !!scanner;
-  $('scan-button').disabled = !uploads.length || scanning || loadingPhotos || startingScanner || !ready || !catalog.length;
-  $('scanner-retry').disabled = startingScanner;
-  $('add-photos').disabled = scanning || loadingPhotos;
-  $('scan-button-label').textContent = uploads.length ? `Scan ${uploads.length} ${uploads.length === 1 ? 'photo' : 'photos'}` : 'Scan photos';
-  $('scan-hint').textContent = startingScanner ? 'Starting scanner…' : 'Photos stay on your device';
+  $('scan-button').disabled = !uploads.length || scanning || loadingFiles;
+  $('add-photos').disabled = scanning || loadingFiles;
+  $('screenshots').disabled = scanning || loadingFiles;
+  $('scan-button-label').textContent = scanning ? 'Scanning…' : uploads.some(upload => upload.video) ? 'Scan files' : 'Scan photos';
 }
 
 function progress(value, message) {
@@ -109,61 +108,89 @@ function selectedUpload() {
 }
 
 function renderUploads(selected = 0) {
+  const photos = uploads.map((upload, index) => ({upload, index})).filter(({upload}) => !upload.video);
   $('image-count').textContent = uploads.length;
-  $('calibration').hidden = !uploads.length;
-  $('upload-label').textContent = uploads.length ? 'Add more photos' : 'Add barn photos';
-  $('upload-list').innerHTML = uploads.map(((upload, index) => `<div class="upload-thumb ${index === selected ? 'active' : ''}" data-upload="${index}" tabindex="0" role="button" aria-label="Align photo ${index + 1}"><img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="${upload.url}" alt="Photo ${index + 1}"><span class="upload-name">Photo ${index + 1}</span><button data-remove="${index}" aria-label="Remove photo ${index + 1}">${icon('close')}</button></div>`)).join('');
-  $('calibration-image').innerHTML = uploads.map(((upload, index) => `<option value="${index}">Photo ${index + 1}</option>`)).join('');
-  if (uploads.length) {
-    $('calibration-image').value = Math.min(selected, uploads.length - 1);
+  $('calibration').hidden = !photos.length;
+  $('upload-label').textContent = uploads.length ? 'Add more photos or videos' : 'Add barn/silo photos or videos';
+  $('upload-list').innerHTML = uploads.map((upload, index) => {
+    const name = upload.video ? 'Video ' + (index + 1) : 'Photo ' + (index + 1);
+    const label = upload.video ? name + ' · ' + Math.ceil(upload.video.duration) + ' s' : name;
+    return `<div class="upload-thumb ${index === selected && !upload.video ? 'active' : ''}" ${upload.video ? '' : `data-upload="${index}" tabindex="0" role="button" aria-label="Align ${name}"`}><img crossorigin="anonymous" referrerpolicy="no-referrer" decoding="async" src="${e(upload.preview || upload.url)}" alt=""><span class="upload-name">${label}</span><button data-remove="${index}" aria-label="Remove ${name}">${icon('close')}</button></div>`;
+  }).join('');
+  $('calibration-image').innerHTML = photos.map(({index}) => `<option value="${index}">Photo ${index + 1}</option>`).join('');
+  const photo = photos.find(({index}) => index === selected) || photos[0];
+  if (photo) {
+    $('calibration-image').value = photo.index;
     showLayout();
   }
   updateButtons();
 }
 
+function releaseUpload(upload) {
+  releaseVideo(upload.video);
+  URL.revokeObjectURL(upload.url);
+}
+
 async function addFiles(files) {
-  if (scanning || loadingPhotos) return;
-  loadingPhotos = true;
+  if (scanning || loadingFiles || !files.length) return;
+  loadingFiles = true;
   updateButtons();
   viewReview(false);
   try {
     for (const file of files) {
       if (uploads.length >= MAX_IMAGES) {
-        toast(`Use up to ${MAX_IMAGES} photos per scan`);
+        toast(`Use up to ${MAX_IMAGES} files per scan`);
         break;
       }
-      if (![ 'image/png', 'image/jpeg', 'image/webp' ].includes(file.type) || file.size > 12 * 1024 * 1024) {
-        toast('Choose PNG, JPG or WebP photos under 12 MB');
+      const isVideo = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v'].includes(file.type) || /\.(mp4|webm|mov|m4v)$/i.test(file.name);
+      const isPhoto = ['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name);
+      if (!isVideo && !isPhoto) {
+        toast('Choose a PNG, JPG, WebP, MP4, WebM or MOV file');
         continue;
       }
-      const url = URL.createObjectURL(file), image = new Image;
+      if (file.size > (isVideo ? MAX_VIDEO_SIZE : 12 * 1024 * 1024)) {
+        toast(isVideo ? 'Use a video under 250 MB' : 'Use a photo under 12 MB');
+        continue;
+      }
+      const videoType = /\.webm$/i.test(file.name) ? 'video/webm' : /\.mov$/i.test(file.name) ? 'video/quicktime' : 'video/mp4';
+      const url = URL.createObjectURL(isVideo && !file.type.startsWith('video/') ? file.slice(0, file.size, videoType) : file);
       try {
-        await new Promise(((resolve, reject) => {
-          image.onload = resolve;
-          image.onerror = reject;
-          image.src = url;
-        }));
-        if (image.width * image.height > 2e7 || uploads.reduce(((sum, x) => sum + x.image.width * x.image.height), 0) + image.width * image.height > 8e7) throw new Error('Scan fewer or smaller photos');
-        const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer())), groupId = Array.from(digest, (x => x.toString(16).padStart(2, '0'))).join('');
-        if (uploads.some((upload => upload.groupId === groupId))) {
+        if (isVideo) {
+          const groupId = ['video', file.name, file.size, file.lastModified].join(':');
+          if (uploads.some(upload => upload.groupId === groupId)) {
+            URL.revokeObjectURL(url);
+            continue;
+          }
+          const clip = await loadVideo(url);
+          const seconds = uploads.reduce((sum, upload) => sum + (upload.video?.duration || 0), clip.video.duration);
+          if (seconds > MAX_VIDEO_SECONDS) {
+            releaseVideo(clip.video);
+            throw new Error('Use up to 3 minutes of video per scan.');
+          }
+          uploads.push({file, url, groupId, ...clip});
+          continue;
+        }
+        const image = new Image();
+        image.src = url;
+        await image.decode();
+        if (image.width * image.height > 2e7 ||
+            uploads.reduce((sum, upload) => sum + (upload.image ? upload.image.width * upload.image.height : 0), 0) + image.width * image.height > 8e7) {
+          throw new Error('Scan fewer or smaller photos');
+        }
+        const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()));
+        const groupId = Array.from(digest, x => x.toString(16).padStart(2, '0')).join('');
+        if (uploads.some(upload => upload.groupId === groupId)) {
           URL.revokeObjectURL(url);
           continue;
         }
-        uploads.push({
-          file: file,
-          url: url,
-          image: image,
-          layout: detectLayout(image),
-          groupId: groupId,
-          preset: 'auto'
-        });
+        uploads.push({file, url, image, layout: detectLayout(image), groupId, preset: 'auto'});
       } catch (error) {
         URL.revokeObjectURL(url);
-        toast(error.message || 'This photo could not be opened');
+        toast(error.message || 'This file could not be opened');
       }
     }
   } finally {
-    loadingPhotos = false;
+    loadingFiles = false;
     renderUploads();
   }
 }
@@ -190,11 +217,11 @@ for (const event of [ 'dragleave', 'drop' ]) $('drop-zone').addEventListener(eve
 }));
 
 function clickUpload(event) {
-  if (scanning || loadingPhotos) return;
+  if (scanning || loadingFiles) return;
   const remove = event.target.closest('[data-remove]');
   if (remove) {
     const index = Number(remove.dataset.remove), [upload] = uploads.splice(index, 1);
-    URL.revokeObjectURL(upload.url);
+    releaseUpload(upload);
     renderUploads(Math.max(0, index - 1));
     return;
   }
@@ -296,7 +323,7 @@ $('detect-layout').onclick = () => {
 $('apply-layout').onclick = () => {
   const upload = selectedUpload();
   if (upload) {
-    uploads.forEach((other => {
+    uploads.filter(other => !other.video).forEach((other => {
       other.layout = structuredClone(upload.layout);
       other.preset = 'manual';
     }));
@@ -305,73 +332,124 @@ $('apply-layout').onclick = () => {
 };
 
 $('cancel-scan').onclick = () => {
-  cancelled = true;
+  scanAbort?.abort();
   progress($('progress').value, 'Stopping…');
 };
 
+function captureReading(reading, cell, upload) {
+  return {
+    ...reading,
+    key: crypto.randomUUID(),
+    tile: cell.tile,
+    numberCrop: cell.numberCrop,
+    preview: (cell.preview || cell.tile).toDataURL(),
+    source: upload.file.name,
+    groupId: upload.groupId,
+    confirmed: false,
+    enabled: reading.quantity !== 0,
+    rect: cell.rect
+  };
+}
+
+function cropScore(ranked) {
+  return (ranked[0]?.score ?? 0) + .34 * Math.min(.14, matchMargin(ranked));
+}
+
+async function retryVideoMatches(scanner, frame, cells, predictions) {
+  const retry = predictions.map((p, index) => ({p, index})).filter(({p}) =>
+    !(options.skipZero && p.isZero) && ((p.ranked[0]?.score ?? 0) < .72 || matchMargin(p.ranked) < .045));
+  if (!retry.length) return;
+  const alternatives = await scanner.predictMany(retry.flatMap(({index}) =>
+    [.082, .052].map(outline => retryVideoCrop(frame, cells[index], outline))));
+  for (const [i, {p, index}] of retry.entries()) {
+    const [first, second] = alternatives.slice(i * 2, i * 2 + 2);
+    const alternative = cropScore(first.ranked) >= cropScore(second.ranked) ? first : second;
+    if (cropScore(alternative.ranked) > cropScore(p.ranked) + .015) {
+      predictions[index] = {...p, ranked: alternative.ranked, recognized: alternative.recognized, uncertain: alternative.uncertain};
+    }
+  }
+}
+
 $('scan-button').onclick = async () => {
-  if (scanning || loadingPhotos || startingScanner || !uploads.length || !scanner) return;
+  if (scanning || loadingFiles || !uploads.length) return;
   scanning = true;
-  cancelled = false;
+  scanAbort = new AbortController();
+  const {signal} = scanAbort, hasVideo = uploads.some(upload => upload.video);
+  const sightings = scanObservations();
   results = [];
   document.body.classList.add('scan-busy');
   $('scan-progress').hidden = false;
   viewReview(false);
   updateButtons();
-  progress(0, 'Reading photos…');
-  let skipped = 0;
-  try {
-    for (let imageIndex = 0; imageIndex < uploads.length; imageIndex++) {
-      if (cancelled) break;
-      const upload = uploads[imageIndex], prepared = scannerCells(upload.image, upload.layout, upload.preset);
-      skipped += prepared.skipped;
-      for (let index = 0; index < prepared.cells.length; index++) {
-        if (cancelled) break;
-        const cell = prepared.cells[index];
-        progress((imageIndex + index / prepared.cells.length) / uploads.length * 100, `Photo ${imageIndex + 1} / ${uploads.length} · item ${index + 1} / ${prepared.cells.length}`);
-        const prediction = await scanner.predict(cell);
+  progress(0, 'Reading files…');
+  let skipped = 0, failure = '';
+
+  async function readFrame(scanner, upload, image, label, percent, videoTime) {
+    signal.throwIfAborted();
+    progress(percent, label);
+    const prepared = await scannerCells(image, upload.layout, upload.video ? 'video' : upload.preset, scanner);
+    skipped += prepared.skipped;
+    for (let i = 0; i < prepared.cells.length; i += 6) {
+      signal.throwIfAborted();
+      const cells = prepared.cells.slice(i, i + 6);
+      const predictions = await scanner.predictMany(cells, options.skipZero);
+      if (upload.video) await retryVideoMatches(scanner, image, cells, predictions);
+      predictions.forEach((prediction, index) => {
         if (prediction.isZero && options.skipZero) {
           skipped++;
-          continue;
+          return;
         }
-        const id = prediction.recognized ? prediction.ranked[0]?.id || '' : '', known = byId.has(id), confidence = prediction.ranked[0]?.score || 0;
-        results.push({
-          key: crypto.randomUUID(),
-          id: id,
+        const [best] = prediction.ranked;
+        const id = prediction.recognized && byId.has(best.id) ? best.id : '';
+        const confidence = best?.score || 0;
+        if (upload.video && (!id || confidence < .65)) return;
+        const reading = {
+          id,
           quantity: prediction.quantity,
           ranked: prediction.ranked,
-          confidence: confidence,
+          confidence,
           quantityConfidence: prediction.quantityConfidence,
-          tile: cell.tile,
-          numberCrop: cell.numberCrop,
-          preview: (cell.preview || cell.tile).toDataURL(),
-          source: upload.file.name,
-          groupId: upload.groupId,
-          confirmed: false,
-          enabled: prediction.quantity !== 0,
-          note: !known ? 'Choose a tradeable item' : prediction.quantity === null ? 'Check quantity' : prediction.uncertain || prediction.quantityConfidence < .85 ? 'Check reading' : '',
-          rect: cell.rect
-        });
-        await new Promise((resolve => setTimeout(resolve, 0)));
+          videoTime,
+          note: !id ? 'Choose a tradeable item' : prediction.quantity === null ? 'Check quantity' :
+            prediction.uncertain || prediction.quantityConfidence < .85 ? 'Check reading' : ''
+        };
+        const capture = () => captureReading(reading, cells[index], upload);
+        if (hasVideo && id) sightings.add(reading, capture, upload.groupId);
+        else results.push(capture());
+      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+  }
+
+  try {
+    const scanner = await prepareScanner();
+    for (const [index, upload] of uploads.entries()) {
+      signal.throwIfAborted();
+      const percent = fraction => (index + fraction) / uploads.length * 100;
+      if (upload.video) {
+        for await (const {frame, index: sample, count, time} of videoFrames(upload.video, signal)) {
+          const label = `Video ${index + 1} / ${uploads.length} · ${Math.floor(time)} s`;
+          if (frame) await readFrame(scanner, upload, frame, label, percent(sample / count), time);
+          else progress(percent(sample / count), label);
+        }
+      } else {
+        await readFrame(scanner, upload, upload.image, `Photo ${index + 1} / ${uploads.length}`, percent(0));
       }
     }
-    progress(100, `${cancelled ? 'Stopped · ' : ''}${results.length} items found${skipped ? ' · ' + skipped + ' clipped or empty' : ''}`);
-    if (results.length) {
-      renderResults();
-      viewReview(true);
-      $('main').scrollIntoView({
-        behavior: 'smooth',
-        block: 'start'
-      });
-    } else toast('No items found · check crop & alignment');
   } catch (error) {
-    toast(error.message || 'Scan interrupted');
+    if (!signal.aborted) failure = error.message || 'Scan interrupted';
+  } finally {
+    if (hasVideo) results.push(...sightings.rows());
+    progress(100, `${signal.aborted ? 'Stopped · ' : ''}${results.length} items found${skipped && !hasVideo ? ' · ' + skipped + ' clipped or empty' : ''}`);
     if (results.length) {
       renderResults();
       viewReview(true);
+      $('main').scrollIntoView({behavior: 'smooth', block: 'start'});
     }
-  } finally {
+    if (failure) toast(failure);
+    else if (!results.length && !signal.aborted) toast(hasVideo ? 'No items found. Keep the barn or silo visible and scroll slowly.' : 'No items found · check crop & alignment');
     scanning = false;
+    scanAbort = null;
     document.body.classList.remove('scan-busy');
     updateButtons();
   }
@@ -484,8 +562,8 @@ $('results-body').onclick = event => {
 };
 
 $('confirm-all').onclick = () => {
-  const rows = results.filter(valid);
-  if (!rows.length) return toast('Choose items and quantities first');
+  const rows = results.filter(row => valid(row) && (row.videoTime === undefined || !row.note));
+  if (!rows.length) return toast(results.some(valid) ? 'Check the highlighted rows first' : 'Choose items and quantities first');
   rows.forEach((row => row.confirmed = true));
   renderResults();
   toast(rows.length + ' items checked');
@@ -640,37 +718,23 @@ $('export-training').onclick = async () => {
   downloadFile('haydex-corrections.zip', await makeZip(files), 'application/zip');
 };
 
-function ready() {
-  $('scanner-status').textContent = 'Ready on device';
-  $('scanner-dot').classList.add('ready');
-  $('scanner-error').hidden = true;
-  $('scanner-retry').hidden = true;
-  updateButtons();
-}
+let catalogReady, preloadedScanner;
 
 async function prepareScanner() {
-  if (startingScanner || scanning) return;
-  startingScanner = true;
-  $('scanner-status').textContent = 'Starting…';
-  $('scanner-error').hidden = true;
-  updateButtons();
   try {
-    scanner = await startScanner();
-    for (const item of catalog) {
-      const fallback = item.image;
-      Object.defineProperty(item, 'image', {configurable: true, get: () => scannerArtwork(item.id) || fallback});
-    }
-    ready();
+    const [engine] = await Promise.all([preloadedScanner || startScanner(), catalogReady]);
+    $('scanner-error').hidden = true;
+    $('scanner-retry').hidden = true;
+    return engine;
   } catch (error) {
-    scanner = null;
-    $('scanner-status').textContent = 'Unavailable';
-    $('scanner-error').textContent = error.message || 'Scanner could not start. Please try again.';
+    $('scanner-error').textContent = error.message || 'Scanner could not load.';
     $('scanner-error').hidden = false;
     $('scanner-retry').hidden = false;
-  } finally {startingScanner = false; updateButtons();}
+    throw error;
+  }
 }
 
-$('scanner-retry').onclick = () => catalog.length ? prepareScanner() : init();
+$('scanner-retry').onclick = init;
 
 function saveExclusions(next) {
   if (!storage.set('scanner-excluded-items', [ ...next ])) {
@@ -719,7 +783,7 @@ function exclusionSettings() {
 $('open-exclusions').onclick = exclusionSettings;
 
 function scanSettings() {
-  modal('Scanner settings', `<div class="scanner-settings"><label class="settings-row global-level-row"><span>Farm level<small>Applies everywhere</small></span><input id="scanner-global-level" data-global-level type="number" min="1" max="999" value="${farmLevel() ?? ''}" placeholder="All" aria-label="Global farm level"></label><label class="settings-row"><span>Skip zero stock</span><input id="skip-zero" type="checkbox" ${options.skipZero ? 'checked' : ''}></label><label class="settings-row"><span>Show price controls</span><input id="scan-show-prices" type="checkbox" ${options.showPrices ? 'checked' : ''}></label><label class="settings-row"><span>Use default price<small>For products without a saved price</small></span><input id="scan-default-prices" type="checkbox" ${options.useDefaultPrice ? 'checked' : ''}></label><label class="settings-row"><span>Save edited prices<small>Use them in future scans</small></span><input id="scan-remember-prices" type="checkbox" ${options.rememberPrices ? 'checked' : ''}></label><button class="settings-row exclusion-settings-link" id="settings-exclusions"><span>Excluded items</span><span>${excluded.size} products</span></button><p class="settings-note">Photos are read on your device. Check each result before creating a trade.</p><div class="dialog-actions"><button class="button primary" id="scanner-settings-done">Done</button></div></div>`);
+  modal('Scanner settings', `<div class="scanner-settings"><label class="settings-row"><span>Skip zero stock</span><input id="skip-zero" type="checkbox" ${options.skipZero ? 'checked' : ''}></label><label class="settings-row"><span>Show price controls</span><input id="scan-show-prices" type="checkbox" ${options.showPrices ? 'checked' : ''}></label><label class="settings-row"><span>Use default price<small>For products without a saved price</small></span><input id="scan-default-prices" type="checkbox" ${options.useDefaultPrice ? 'checked' : ''}></label><label class="settings-row"><span>Save edited prices<small>Use them in future scans</small></span><input id="scan-remember-prices" type="checkbox" ${options.rememberPrices ? 'checked' : ''}></label><button class="settings-row exclusion-settings-link" id="settings-exclusions"><span>Excluded items</span><span>${excluded.size} products</span></button><p class="settings-note">Files are read on your device. Check each result before creating a trade.</p><div class="dialog-actions"><button class="button primary" id="scanner-settings-done">Done</button></div></div>`);
   for (const [id, key] of [ [ 'scan-show-prices', 'showPrices' ], [ 'scan-default-prices', 'useDefaultPrice' ], [ 'scan-remember-prices', 'rememberPrices' ] ]) $(id).onchange = event => {
     const next = {
       ...options,
@@ -732,7 +796,6 @@ function scanSettings() {
     options = next;
     renderResults();
   };
-  bindGlobalLevel($('scanner-global-level'));
   $('settings-exclusions').onclick = exclusionSettings;
   const aboutLink = document.createElement('button');
   aboutLink.id = 'scanner-about';
@@ -752,7 +815,6 @@ function scanSettings() {
 
 }
 
-$('scanner-settings').onclick = scanSettings;
 
 $('open-settings').onclick = scanSettings;
 
@@ -782,31 +844,31 @@ $('results-body').onkeydown = event => {
   }
 };
 
-async function init() {
-  try {
+function init() {
+  preloadedScanner = startScanner().catch(error => {
+    preloadedScanner = null;
+    throw error;
+  });
+  catalogReady = (async () => {
     const response = await fetch('../data/catalog.json');
     if (!response.ok) throw new Error('Items could not load');
     catalog = (await response.json()).items;
-    byId = new Map(catalog.map((item => [ item.id, item ])));
+    byId = new Map(catalog.map(item => [item.id, item]));
+    for (const item of catalog) {
+      const fallback = item.image;
+      Object.defineProperty(item, 'image', {get: () => scannerArtwork(item.id) || fallback});
+    }
     excluded = excludedItemIds(storage.get('scanner-excluded-items', []), byId);
     $('excluded-count').textContent = excluded.size;
     const level = farmLevel();
     $('header-level').textContent = level ? 'Lv. ' + level : 'Level';
-    renderUploads();
-    await prepareScanner();
-  } catch (error) {
-    toast(error.message);
-    $('scanner-status').textContent = 'Unavailable';
-    $('scanner-error').hidden = false;
-    $('scanner-error').textContent = error.message;
-    $('scanner-retry').hidden = false;
-  } finally {
-    startingScanner = false;
-    updateButtons();
-  }
+  })();
+  prepareScanner().catch(() => {});
 }
 
-window.addEventListener('beforeunload', (() => uploads.forEach((upload => URL.revokeObjectURL(upload.url)))));
+window.addEventListener('pagehide', event => {
+  if (!event.persisted) uploads.forEach(releaseUpload);
+});
 
 window.addEventListener('message', (event => {
   if (!embedded || event.source !== parent || event.origin !== location.origin || event.data?.type !== 'hayday-scanner-action') return;

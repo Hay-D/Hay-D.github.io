@@ -1,6 +1,6 @@
 {
   "name": "haydex",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
   "license": "Apache-2.0",
   "engines": {
@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "update-prices": "node scripts/update-market-prices.mjs",
+    "build:scanner": "node scripts/build-scanner.mjs",
     "build": "node scripts/build.mjs",
     "preview": "node scripts/serve.mjs dist"
   }

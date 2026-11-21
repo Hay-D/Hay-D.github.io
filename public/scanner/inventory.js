@@ -57,7 +57,7 @@ export function normalizeGlyph(labels, width, glyph) {
   return out;
 }
 
-export function extractInventory(data, width, height) {
+export function extractInventory(data, width, height, video = false) {
   const creamMask = new Uint8Array(width * height);
   for (let i = 0; i < creamMask.length; i++) {
     const p = i * 4, r = data[p], g = data[p + 1], b = data[p + 2];
@@ -67,6 +67,17 @@ export function extractInventory(data, width, height) {
   const panel = cream.stats.reduce(((best, s) => !best || s.area > best.area ? s : best), null);
   if (!panel || panel.area < width * height * .04 || panel.w < width * .15) {
     throw new Error('No inventory panel found. Use a clear barn or silo screenshot.');
+  }
+  let visibleTop = panel.y;
+  if (video) {
+    const inset = Math.floor(panel.w / 6), left = panel.x + inset, right = panel.x + panel.w - inset;
+    let run = 0;
+    for (let y = panel.y; y < panel.y + Math.floor(panel.h / 3); y++) {
+      let visible = 0;
+      for (let x = left; x < right; x += 4) visible += creamMask[y * width + x];
+      run = visible * 8 >= right - left ? run + 1 : 0;
+      if (run === 3) {visibleTop = y - 2; break;}
+    }
   }
   const white = new Uint8Array(panel.w * panel.h);
   for (let y = 0; y < panel.h; y++) for (let x = 0; x < panel.w; x++) {
@@ -127,7 +138,7 @@ export function extractInventory(data, width, height) {
     const right = Math.max(...digits.map((g => g.box[0] + g.box[2]))), bottom = Math.max(...digits.map((g => g.box[1] + g.box[3])));
     const h = bottom - y, side = roundEven(h * 2.75), ix = roundEven(right - h * 2.75), iy = roundEven(y - h * 1.18);
     const quantityBox = [ x, y, right - x, h ];
-    if (ix < panel.x || iy < panel.y || ix + side > panel.x + panel.w || iy + side > panel.y + panel.h) {
+    if (ix < panel.x || iy < Math.max(panel.y, visibleTop - (video ? Math.floor(h / 8) : 0)) || ix + side > panel.x + panel.w || iy + side > panel.y + panel.h) {
       skipped.push({
         quantity_box: quantityBox,
         reason: 'Partially visible item; use an overlapping screenshot.'

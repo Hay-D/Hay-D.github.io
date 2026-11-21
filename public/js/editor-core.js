@@ -1,6 +1,7 @@
 import { number, totals, unitPrice, parsePrice, parseQuantity, resolveItem, parseImport } from './core.js';
 
 import { PERMANENT_WATERMARK } from './branding.js';
+import {applyDiscount} from './trade-posts.js';
 
 export const imageDefaults = {
   layout: 'auto',
@@ -175,8 +176,9 @@ export function priceLabel(row, simplify = true) {
   return value >= 1e6 && value % 1e4 === 0 ? number(value / 1e6) + 'm' : value >= 1e3 && value % 10 === 0 ? number(value / 1e3) + 'k' : number(value);
 }
 
-export function paymentSummary(rows, byId, paymentId) {
+export function paymentSummary(rows, byId, paymentId, discount = null) {
   const total = totals(rows, byId), item = byId.get(paymentId), base = item?.maxPrice;
+  if (discount) Object.assign(total, applyDiscount(total.coins, discount));
   return {
     ...total,
     item: item,
@@ -184,8 +186,8 @@ export function paymentSummary(rows, byId, paymentId) {
   };
 }
 
-export function tradeOverview(rows, byId, paymentId) {
-  const summary = paymentSummary(rows, byId, paymentId);
+export function tradeOverview(rows, byId, paymentId, discount = null) {
+  const summary = paymentSummary(rows, byId, paymentId, discount);
   return {
     ...summary,
     goods: rows.length,

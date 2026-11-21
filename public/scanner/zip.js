@@ -7,7 +7,7 @@ const table = Array.from({
   return n >>> 0;
 }));
 
-function crc32(data) {
+export function crc32(data) {
   let crc = 4294967295;
   for (const byte of data) crc = table[(crc ^ byte) & 255] ^ crc >>> 8;
   return (crc ^ 4294967295) >>> 0;

@@ -102,14 +102,9 @@ html { scroll-padding-top: 64px; }
 .preview-info { color: var(--muted); font-family: var(--sans); opacity: 1; }
 .toast { bottom: calc(90px + env(safe-area-inset-bottom)); font-size: 12px; padding: 11px 15px; border-radius: 7px; box-shadow: none; }
 .delete-zone { font-family: var(--sans); border-radius: 8px; height: 58px; background: #301f22; border-color: #995961; }
-.scanner-view { max-width: 1120px; padding-top: 14px; padding-bottom: 84px; }
+.scanner-view { padding-bottom: 84px; }
 .scanner-view iframe { height: calc(100dvh - 150px); min-height: 320px; }
-.scanner-page .app-main { max-width: 1040px; padding-top: 18px; }
-.page-title { margin-bottom: 16px; align-items: center; }
-.page-title h1 { font: 550 19px var(--sans); letter-spacing: -.02em; }
-.scanner-badge { font: 400 11px var(--sans); min-height: 36px; border: 0; padding: 8px; border-radius: 6px; background: transparent; }
-.status-dot { width: 5px; height: 5px; }
-.scanner-topline { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.scanner-topline { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; margin-bottom: 12px; }
 .scanner-topline .scan-steps { margin: 0; width: auto; }
 .scan-steps button { font: 400 12px var(--sans); min-width: 108px; min-height: 34px; }
 .scanner-topline .scanner-preferences { margin: 0; }
@@ -212,12 +207,11 @@ html { scroll-padding-top: 64px; }
   .compact-level { font-size: 11px; }
   .dialog .preview-actions { bottom: -14px; margin: 14px -14px -14px; padding: 10px 12px; gap: 7px; }
   .preview-actions .button { font-size: 11px; padding: 10px; }
-  .scanner-view { padding-top: 12px; padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
+  .scanner-view { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
   .scanner-view iframe { height: calc(100dvh - 130px - env(safe-area-inset-bottom)); min-height: 300px; }
-  .scanner-page .app-main { padding-top: 14px; }
   .page-title { margin-bottom: 13px; }
   .page-title h1 { font-size: 18px; }
-  .scanner-topline { gap: 8px; margin-bottom: 14px; }
+  .scanner-topline { gap: 8px; }
   .scan-steps button { min-width: 0; padding: 7px 10px; font-size: 11px; }
   .scanner-preferences .button { padding: 8px 10px; font-size: 10px; }
   .setup-copy p { font-size: 10px; }

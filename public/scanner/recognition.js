@@ -19,7 +19,7 @@ function call(kind, data = {}, transfers = []) {
     worker.onerror = () => stop(new Error('Scanner could not start. Reload and try again.'));
   }
   return new Promise((resolve, reject) => {
-    const id = ++sequence, timer = setTimeout(() => stop(new Error('Scanner took too long. Try fewer photos.')), 30000);
+    const id = ++sequence, timer = setTimeout(() => stop(new Error('Scanner took too long. Try fewer files.')), 30000);
     pending.set(id, {resolve, reject, timer});
     try {worker.postMessage({id, kind, ...data}, transfers);} catch (error) {stop(error);}
   });
@@ -52,20 +52,30 @@ export function scannerArtwork(id) {
 
 export function startScanner() {
   if (!starting) starting = (async () => {
-    const response = await fetch(new URL('./references/index.json', import.meta.url));
-    if (!response.ok) throw new Error('Scanner references could not load.');
-    referenceIndex = await response.json();
-    const [art, numbers] = await Promise.all([image('items.webp'), image('digits.png')]);
+    const index = fetch(new URL('./references/index.json', import.meta.url)).then(response => {
+      if (!response.ok) throw new Error('Scanner references could not load.');
+      return response.json();
+    });
+    const [data, art, numbers] = await Promise.all([index, image('items.webp'), image('digits.png')]);
+    referenceIndex = data;
     artwork = art;
     const rgba = pixels(art), glyphs = pixels(numbers);
-    await call('load', {index: referenceIndex, art: rgba, artWidth: art.width, numbers: glyphs, numberWidth: numbers.width}, [rgba.buffer, glyphs.buffer]);
+    const engine = await call('load', {index: referenceIndex, art: rgba, artWidth: art.width, numbers: glyphs, numberWidth: numbers.width}, [rgba.buffer, glyphs.buffer]);
     try {indexedDB.deleteDatabase('hayday-scanner-models');} catch {}
     return {
-      async predict(cell) {
+      engine,
+      async predictMany(cells, skipZero = false) {
         await startScanner();
-        const rgba = cell.item.getContext('2d', {willReadFrequently: true}).getImageData(0, 0, cell.item.width, cell.item.height).data;
-        const digits = cell.digitPixels.slice();
-        return call('predict', {pixels: rgba, width: cell.item.width, height: cell.item.height, digits, digitCount: cell.digitCount}, [rgba.buffer, digits.buffer]);
+        const inputs = cells.map(cell => {
+          const {width, height} = cell.item;
+          const pixels = cell.item.getContext('2d', {willReadFrequently: true}).getImageData(0, 0, width, height).data;
+          return {pixels, width, height, digits: cell.digitPixels, digitCount: cell.digitCount};
+        });
+        return call('predict', {cells: inputs, skipZero}, inputs.flatMap(cell => [cell.pixels.buffer, cell.digits.buffer]));
+      },
+      async inventory(pixels, width, height, video = false) {
+        await startScanner();
+        return call('inventory', {pixels, width, height, video}, [pixels.buffer]);
       }
     };
   })().catch(error => {stop(error); throw error;});

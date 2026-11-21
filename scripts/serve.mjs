@@ -18,6 +18,7 @@ const types = {
   '.svg': 'image/svg+xml',
   '.woff2': 'font/woff2',
   '.wasm': 'application/wasm',
+  '.pdf': 'application/pdf',
   '.txt': 'text/plain; charset=utf-8'
 };
 
