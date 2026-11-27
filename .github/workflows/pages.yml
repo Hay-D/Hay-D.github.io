@@ -9,19 +9,17 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+  pages: read
 
 concurrency:
   group: github-pages
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,8 +31,41 @@ jobs:
         continue-on-error: true
       - run: npm run build
       - uses: actions/upload-pages-artifact@v4
+        id: upload
         with:
           path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Wait for Pages artifact
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ needs.build.outputs.artifact-id }}
+        run: |
+          if [[ -z "$ARTIFACT_ID" ]]; then
+            echo "::error::The build did not return a Pages artifact ID."
+            exit 1
+          fi
+          for attempt in {1..12}; do
+            if artifact_ids=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=github-pages" --jq '.artifacts[] | select(.expired == false) | .id') &&
+              grep -Fxq -- "$ARTIFACT_ID" <<< "$artifact_ids"; then
+              echo "Pages artifact $ARTIFACT_ID is available."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Pages artifact $ARTIFACT_ID did not become available."
+          exit 1
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
